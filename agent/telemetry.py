@@ -128,13 +128,28 @@ class OtelMindTelemetry:
         return wrapper
 
     def instrument_graph(self, graph_builder: Any) -> None:
-        """Instrument all nodes on a LangGraph StateGraph builder."""
-        if hasattr(graph_builder, "nodes"):
-            for node_name in list(graph_builder.nodes.keys()):
-                if node_name.startswith("__"):
-                    continue
-                original = graph_builder.nodes[node_name]
-                graph_builder.nodes[node_name] = self.instrument_node(node_name, original)
+        """Instrument all nodes on a LangGraph StateGraph builder.
+
+        Modern LangGraph stores nodes as StateNodeSpec objects with a .runnable
+        attribute. We wrap the underlying runnable's .func, preserving the spec.
+        """
+        if not hasattr(graph_builder, "nodes"):
+            return
+
+        for node_name in list(graph_builder.nodes.keys()):
+            if node_name.startswith("__"):
+                continue
+
+            node_spec = graph_builder.nodes[node_name]
+
+            # Modern LangGraph: StateNodeSpec with .runnable (RunnableCallable)
+            if hasattr(node_spec, "runnable") and hasattr(node_spec.runnable, "func"):
+                original_func = node_spec.runnable.func
+                node_spec.runnable.func = self.instrument_node(node_name, original_func)
+                print(f"  Instrumented node: {node_name}")
+            elif callable(node_spec):
+                # Fallback for older LangGraph versions
+                graph_builder.nodes[node_name] = self.instrument_node(node_name, node_spec)
                 print(f"  Instrumented node: {node_name}")
 
     def flush(self) -> int:
