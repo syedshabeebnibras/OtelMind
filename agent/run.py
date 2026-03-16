@@ -17,15 +17,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Verify OpenAI key is set
-if not os.getenv("OPENAI_API_KEY") and not os.getenv("LLM_API_KEY"):
-    # Try LLM_API_KEY as fallback
-    llm_key = os.getenv("LLM_API_KEY", "")
-    if llm_key:
-        os.environ["OPENAI_API_KEY"] = llm_key
-    else:
-        print("ERROR: Set OPENAI_API_KEY or LLM_API_KEY in .env")
-        sys.exit(1)
+# Verify OpenAI key is set — use LLM_API_KEY as fallback
+openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+llm_key = (os.getenv("LLM_API_KEY") or "").strip()
+
+if openai_key:
+    os.environ["OPENAI_API_KEY"] = openai_key
+elif llm_key:
+    os.environ["OPENAI_API_KEY"] = llm_key
+else:
+    print("ERROR: Set OPENAI_API_KEY or LLM_API_KEY in .env")
+    sys.exit(1)
 
 from agent.graph import build_graph
 from agent.telemetry import OtelMindTelemetry
@@ -33,16 +35,26 @@ from agent.telemetry import OtelMindTelemetry
 # ── Sample queries ──────────────────────────────────────────────────────
 
 QUERIES = [
-    # Normal queries
-    "What are the latest trends in AI agents and autonomous systems in 2024-2025?",
-    "Explain the differences between RAG, fine-tuning, and prompt engineering for LLMs",
-    "What is OpenTelemetry and how does it work for distributed tracing?",
-    # Harder query — likely to trigger longer processing / revision loops
-    "Compare every major cloud provider's serverless GPU offering, include exact pricing "
-    "per hour, supported GPU models, cold start times, and regional availability as of 2025. "
-    "Be extremely specific with numbers.",
-    # Intentionally vague — may produce lower quality that triggers review loop
-    "Tell me about the thing with the stuff",
+    "Explain how photosynthesis works",
+    "Summarize the history of the internet",
+    "What is machine learning and how does it differ from traditional programming?",
+    "How do vaccines work to protect against diseases?",
+    "What causes earthquakes and how are they measured?",
+    "Explain the basics of supply and demand in economics",
+    "How does encryption keep data secure on the internet?",
+    "What is climate change and what are its main causes?",
+    "Describe how a CPU processes instructions",
+    "What are the key differences between SQL and NoSQL databases?",
+    "How does the human immune system fight infections?",
+    "Explain the theory of relativity in simple terms",
+    "What is blockchain technology and how does it work?",
+    "How do electric vehicles differ from traditional combustion engine cars?",
+    "What is CRISPR and how is it used in gene editing?",
+    "Explain how containerization works in software development",
+    "What are black holes and how do they form?",
+    "How does natural language processing work in AI?",
+    "What is the water cycle and why is it important?",
+    "Explain the basics of how the stock market works",
 ]
 
 
