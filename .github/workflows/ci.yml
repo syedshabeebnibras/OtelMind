@@ -118,17 +118,17 @@ jobs:
 
           # Placeholder results — in production these come from benchmark.run()
           results = BenchmarkResults(
-              total_scenarios=100,
-              correct_classifications=97,
+              total=100,
+              correct=97,
               false_positives=1,
               false_negatives=2,
-              remediations_attempted=20,
-              remediations_successful=19,
+              remediation_attempted=20,
+              remediation_succeeded=19,
           )
 
           gate = QualityGate()
           result = gate.check_detailed(results)
-          print(result.summary)
+          print(result.summary())
 
           if not result.passed:
               raise SystemExit('Quality gate FAILED — blocking deployment')
