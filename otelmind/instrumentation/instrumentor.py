@@ -120,7 +120,7 @@ class OtelMindInstrumentor:
                     OTLPSpanExporter,
                 )
 
-                exporter = OTLPSpanExporter(endpoint=self._otel_endpoint)
+                exporter = OTLPSpanExporter(endpoint=self._otel_endpoint)  # type: ignore[assignment]
             except ImportError:
                 logger.warning("OTLP gRPC exporter not available; falling back to console export")
                 exporter = ConsoleSpanExporter()
@@ -130,7 +130,7 @@ class OtelMindInstrumentor:
 
         # Monkey-patch CompiledGraph.invoke
         try:
-            from langgraph.pregel import CompiledGraph
+            from langgraph.pregel import CompiledGraph  # type: ignore[attr-defined]
         except ImportError:
             logger.error("langgraph is not installed — cannot instrument CompiledGraph.invoke")
             return
@@ -201,7 +201,7 @@ class OtelMindInstrumentor:
             return
 
         try:
-            from langgraph.pregel import CompiledGraph
+            from langgraph.pregel import CompiledGraph  # type: ignore[attr-defined]
 
             CompiledGraph.invoke = _original_invoke  # type: ignore[assignment]
             _original_invoke = None

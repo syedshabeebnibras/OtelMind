@@ -96,7 +96,7 @@ def _start_api_server(shutdown_event: asyncio.Event) -> asyncio.Task:
         server = uvicorn.Server(config)
 
         # Override uvicorn's default signal handling so we control shutdown
-        server.install_signal_handlers = lambda: None  # type: ignore[assignment]
+        server.install_signal_handlers = lambda: None  # type: ignore[assignment,attr-defined]
 
         serve_task = asyncio.create_task(server.serve())
 

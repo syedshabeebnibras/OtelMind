@@ -87,14 +87,16 @@ def check_tool_misuse(spans: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 def run_all_heuristics(spans: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Run all heuristic checks and return the first match (if any)."""
-    checks = [
-        check_tool_timeout,
-        check_infinite_loop,
-        check_context_overflow,
-        check_tool_misuse,
-    ]
-    for check in checks:
-        result = check(spans)
-        if result is not None:
-            return result
+    result = check_tool_timeout(spans)
+    if result is not None:
+        return result
+    result = check_infinite_loop(spans)
+    if result is not None:
+        return result
+    result = check_context_overflow(spans)
+    if result is not None:
+        return result
+    result = check_tool_misuse(spans)
+    if result is not None:
+        return result
     return None
