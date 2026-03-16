@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from loguru import logger
@@ -33,10 +33,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Shutdown
     watchdog.stop()
     watchdog_task.cancel()
-    try:
+    with suppress(asyncio.CancelledError):
         await watchdog_task
-    except asyncio.CancelledError:
-        pass
     shutdown_tracer()
     logger.info("OtelMind shut down cleanly")
 

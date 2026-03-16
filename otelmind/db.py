@@ -10,9 +10,8 @@ The SQLAlchemy async engine is used by the API and watchdog for ORM queries.
 
 from __future__ import annotations
 
-import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import (

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
@@ -39,22 +39,16 @@ class SpanProcessor:
         logger.info("Processed {} spans across {} traces", persisted, len(traces))
         return persisted
 
-    async def _ensure_trace(
-        self, trace_id: str, spans: list[dict[str, Any]]
-    ) -> None:
+    async def _ensure_trace(self, trace_id: str, spans: list[dict[str, Any]]) -> None:
         """Create trace record if it doesn't already exist."""
         existing = await self._svc.get_trace(trace_id)
         if existing:
             return
 
-        start_times = [
-            _parse_dt(s["start_time"]) for s in spans if s.get("start_time")
-        ]
-        end_times = [
-            _parse_dt(s["end_time"]) for s in spans if s.get("end_time")
-        ]
+        start_times = [_parse_dt(s["start_time"]) for s in spans if s.get("start_time")]
+        end_times = [_parse_dt(s["end_time"]) for s in spans if s.get("end_time")]
 
-        start_time = min(start_times) if start_times else datetime.now(timezone.utc)
+        start_time = min(start_times) if start_times else datetime.now(UTC)
         end_time = max(end_times) if end_times else None
 
         duration_ms = None

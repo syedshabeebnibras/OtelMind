@@ -31,9 +31,7 @@ class RetryStrategy(RemediationStrategy):
         classification: dict[str, Any],
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        max_attempts: int = context.get(
-            "max_attempts", settings.remediation_max_retries
-        )
+        max_attempts: int = context.get("max_attempts", settings.remediation_max_retries)
         backoff_base: float = context.get("backoff_base", 2.0)
         callable_fn = context.get("callable")
 
@@ -79,7 +77,9 @@ class RetryStrategy(RemediationStrategy):
                 "result": result,
             }
         except RetryError as exc:
-            last_error = str(exc.last_attempt.exception()) if exc.last_attempt.exception() else str(exc)
+            last_error = (
+                str(exc.last_attempt.exception()) if exc.last_attempt.exception() else str(exc)
+            )
             logger.error(
                 "RetryStrategy exhausted after {} attempts for trace {}: {}",
                 attempt_count,

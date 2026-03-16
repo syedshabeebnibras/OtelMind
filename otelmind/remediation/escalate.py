@@ -45,11 +45,7 @@ class EscalateStrategy(RemediationStrategy):
             "failure_type": classification.get("failure_type"),
             "confidence": classification.get("confidence"),
             "evidence": classification.get("evidence"),
-            "context": {
-                k: v
-                for k, v in context.items()
-                if k not in ("webhook_url",)
-            },
+            "context": {k: v for k, v in context.items() if k not in ("webhook_url",)},
         }
 
         timeout = context.get("timeout", 15.0)

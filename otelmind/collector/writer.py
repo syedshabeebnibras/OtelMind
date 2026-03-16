@@ -7,6 +7,7 @@ Accumulates spans in a buffer and flushes on a timer or when the buffer is full.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from typing import Any
 
@@ -58,10 +59,8 @@ class BatchWriter:
         self._running = False
         if self._flush_task:
             self._flush_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._flush_task
-            except asyncio.CancelledError:
-                pass
         await self._flush()
         logger.info("BatchWriter stopped")
 
@@ -101,16 +100,15 @@ class BatchWriter:
             self._error_buffer = []
 
         try:
-            async with self.pool.acquire() as conn:
-                async with conn.transaction():
-                    if traces:
-                        await self._insert_traces(conn, traces)
-                    if spans:
-                        await self._insert_spans(conn, spans)
-                    if tokens:
-                        await self._insert_tokens(conn, tokens)
-                    if errors:
-                        await self._insert_errors(conn, errors)
+            async with self.pool.acquire() as conn, conn.transaction():
+                if traces:
+                    await self._insert_traces(conn, traces)
+                if spans:
+                    await self._insert_spans(conn, spans)
+                if tokens:
+                    await self._insert_tokens(conn, tokens)
+                if errors:
+                    await self._insert_errors(conn, errors)
 
             logger.debug(
                 "Flushed %d spans, %d token records, %d errors",
@@ -127,9 +125,7 @@ class BatchWriter:
                 self._token_buffer = tokens + self._token_buffer
                 self._error_buffer = errors + self._error_buffer
 
-    async def _insert_traces(
-        self, conn: asyncpg.Connection, traces: list[dict[str, Any]]
-    ) -> None:
+    async def _insert_traces(self, conn: asyncpg.Connection, traces: list[dict[str, Any]]) -> None:
         await conn.executemany(
             """
             INSERT INTO traces (trace_id, service_name, started_at)
@@ -139,9 +135,7 @@ class BatchWriter:
             [(t["trace_id"], t["service_name"], t["started_at"]) for t in traces],
         )
 
-    async def _insert_spans(
-        self, conn: asyncpg.Connection, spans: list[dict[str, Any]]
-    ) -> None:
+    async def _insert_spans(self, conn: asyncpg.Connection, spans: list[dict[str, Any]]) -> None:
         await conn.executemany(
             """
             INSERT INTO spans (
@@ -168,9 +162,7 @@ class BatchWriter:
             ],
         )
 
-    async def _insert_tokens(
-        self, conn: asyncpg.Connection, tokens: list[dict[str, Any]]
-    ) -> None:
+    async def _insert_tokens(self, conn: asyncpg.Connection, tokens: list[dict[str, Any]]) -> None:
         await conn.executemany(
             """
             INSERT INTO token_counts (
@@ -191,9 +183,7 @@ class BatchWriter:
             ],
         )
 
-    async def _insert_errors(
-        self, conn: asyncpg.Connection, errors: list[dict[str, Any]]
-    ) -> None:
+    async def _insert_errors(self, conn: asyncpg.Connection, errors: list[dict[str, Any]]) -> None:
         await conn.executemany(
             """
             INSERT INTO tool_errors (

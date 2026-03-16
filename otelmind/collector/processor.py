@@ -8,7 +8,7 @@ directly to our PostgreSQL tables.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -29,13 +29,13 @@ def process_span(span_data: dict[str, Any]) -> dict[str, Any]:
         "status_code": span_data.get("status", {}).get("status_code", "UNSET"),
         "input_preview": str(attributes.get("otelmind.input_preview", ""))[:500],
         "output_preview": str(attributes.get("otelmind.output_preview", ""))[:500],
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
 
     trace_record = {
         "trace_id": span_data.get("trace_id"),
         "service_name": attributes.get("otelmind.service_name", "unknown"),
-        "started_at": datetime.now(timezone.utc),
+        "started_at": datetime.now(UTC),
     }
 
     # Extract token counts (only if this span involved an LLM call)
@@ -48,7 +48,7 @@ def process_span(span_data: dict[str, Any]) -> dict[str, Any]:
             "prompt_tokens": int(prompt_tokens),
             "completion_tokens": int(attributes.get("otelmind.completion_tokens", 0)),
             "model": attributes.get("otelmind.model", "unknown"),
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         }
 
     # Extract error info
@@ -61,7 +61,7 @@ def process_span(span_data: dict[str, Any]) -> dict[str, Any]:
             "tool_name": span_record["span_name"],
             "error_type": error_type,
             "error_message": attributes.get("otelmind.error_message", ""),
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         }
 
     return {

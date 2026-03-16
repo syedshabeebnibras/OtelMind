@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import functools
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from loguru import logger
 from opentelemetry import trace
 from opentelemetry.trace import StatusCode
 
-from otelmind.instrumentation.tracer import init_tracer, get_tracer
+from otelmind.instrumentation.tracer import get_tracer, init_tracer
 
 _original_invoke: Callable | None = None
 
@@ -118,11 +119,10 @@ class OtelMindInstrumentor:
                 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
                     OTLPSpanExporter,
                 )
+
                 exporter = OTLPSpanExporter(endpoint=self._otel_endpoint)
             except ImportError:
-                logger.warning(
-                    "OTLP gRPC exporter not available; falling back to console export"
-                )
+                logger.warning("OTLP gRPC exporter not available; falling back to console export")
                 exporter = ConsoleSpanExporter()
 
         init_tracer(exporter=exporter, service_name=self._service_name)
@@ -132,9 +132,7 @@ class OtelMindInstrumentor:
         try:
             from langgraph.pregel import CompiledGraph
         except ImportError:
-            logger.error(
-                "langgraph is not installed — cannot instrument CompiledGraph.invoke"
-            )
+            logger.error("langgraph is not installed — cannot instrument CompiledGraph.invoke")
             return
 
         if _original_invoke is not None:
@@ -145,7 +143,9 @@ class OtelMindInstrumentor:
         instrumentor = self
 
         @functools.wraps(_original_invoke)
-        def _traced_invoke(graph_self: Any, input: Any, config: Any = None, **kwargs: Any) -> Any:
+        def _traced_invoke(
+            graph_self: Any, input_data: Any, config: Any = None, **kwargs: Any
+        ) -> Any:
             tracer = instrumentor._tracer
             assert tracer is not None
 
@@ -163,16 +163,20 @@ class OtelMindInstrumentor:
                     # Patch individual nodes before invocation
                     instrumentor._patch_nodes(graph_self)
 
-                    result = _original_invoke(graph_self, input, config, **kwargs)
+                    result = _original_invoke(graph_self, input_data, config, **kwargs)
 
                     elapsed_ms = (time.perf_counter() - start) * 1000
                     root_span.set_attribute("graph.duration_ms", round(elapsed_ms, 2))
 
                     # Extract token counts from final state
-                    tokens = _extract_token_counts(result, result if isinstance(result, dict) else None)
+                    tokens = _extract_token_counts(
+                        result, result if isinstance(result, dict) else None
+                    )
                     if tokens["total_tokens"]:
                         root_span.set_attribute("llm.prompt_tokens", tokens["prompt_tokens"])
-                        root_span.set_attribute("llm.completion_tokens", tokens["completion_tokens"])
+                        root_span.set_attribute(
+                            "llm.completion_tokens", tokens["completion_tokens"]
+                        )
                         root_span.set_attribute("llm.total_tokens", tokens["total_tokens"])
 
                     root_span.set_status(StatusCode.OK)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+
 from otelmind.instrumentation.langgraph_instrumentor import (
     LangGraphInstrumentor,
     _extract_token_usage,
@@ -67,10 +69,8 @@ class TestInstrumentor:
         def bad_node(state: dict) -> dict:
             raise ValueError("boom")
 
-        try:
+        with contextlib.suppress(ValueError):
             bad_node({})
-        except ValueError:
-            pass
 
         records = instrumentor.span_records
         assert len(records) == 1

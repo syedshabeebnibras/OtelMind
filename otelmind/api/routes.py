@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from otelmind.api.schemas import (
@@ -20,17 +20,16 @@ from otelmind.api.schemas import (
     TraceDetailResponse,
     TraceResponse,
 )
-from sqlalchemy import func
-
 from otelmind.collector.collector import collector
 from otelmind.db import get_session
-from otelmind.storage.models import FailureClassification, RemediationAction, Span, Trace
+from otelmind.storage.models import FailureClassification, RemediationAction, Trace
 from otelmind.storage.telemetry_service import TelemetryService
 
 router = APIRouter()
 
 
 # ── Health ──────────────────────────────────────────────────────────────
+
 
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
@@ -53,6 +52,7 @@ async def health() -> HealthResponse:
 
 # ── Traces ──────────────────────────────────────────────────────────────
 
+
 @router.get("/traces", response_model=list[TraceResponse])
 async def list_traces(
     limit: int = Query(50, ge=1, le=500),
@@ -68,11 +68,7 @@ async def list_traces(
 async def get_trace(trace_id: str) -> TraceDetailResponse:
     async with get_session() as session:
         # Load trace with spans eagerly
-        stmt = (
-            select(Trace)
-            .where(Trace.trace_id == trace_id)
-            .options(selectinload(Trace.spans))
-        )
+        stmt = select(Trace).where(Trace.trace_id == trace_id).options(selectinload(Trace.spans))
         result = await session.execute(stmt)
         trace = result.scalar_one_or_none()
 
@@ -95,6 +91,7 @@ async def get_trace(trace_id: str) -> TraceDetailResponse:
 
 # ── Spans ───────────────────────────────────────────────────────────────
 
+
 @router.get("/spans", response_model=list[SpanResponse])
 async def list_spans(
     trace_id: str | None = Query(None),
@@ -109,6 +106,7 @@ async def list_spans(
 
 # ── Failures ────────────────────────────────────────────────────────────
 
+
 @router.get("/failures", response_model=list[FailureResponse])
 async def list_failures(
     limit: int = Query(50, ge=1, le=500),
@@ -122,6 +120,7 @@ async def list_failures(
 
 # ── Metrics ─────────────────────────────────────────────────────────────
 
+
 @router.get("/metrics", response_model=MetricsResponse)
 async def get_metrics() -> MetricsResponse:
     async with get_session() as session:
@@ -132,6 +131,7 @@ async def get_metrics() -> MetricsResponse:
 
 # ── Ingestion ───────────────────────────────────────────────────────────
 
+
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest_spans(spans: list[SpanIngestRequest]) -> IngestResponse:
     """Ingest span records from instrumented LangGraph agents."""
@@ -141,10 +141,11 @@ async def ingest_spans(spans: list[SpanIngestRequest]) -> IngestResponse:
         return IngestResponse(ingested=count, status="ok")
     except Exception as exc:
         logger.exception("Ingestion failed")
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 # ── Dashboard ───────────────────────────────────────────────────────────
+
 
 @router.get("/dashboard/stats", response_model=DashboardStatsResponse)
 async def dashboard_stats() -> DashboardStatsResponse:
@@ -156,18 +157,13 @@ async def dashboard_stats() -> DashboardStatsResponse:
         # Failure rate
         total_traces = metrics["total_traces"]
         total_failures = metrics["total_failures"]
-        failure_rate = (
-            round(total_failures / total_traces * 100, 2) if total_traces > 0 else 0.0
-        )
+        failure_rate = round(total_failures / total_traces * 100, 2) if total_traces > 0 else 0.0
 
         # Failures by type
-        fc_stmt = (
-            select(
-                FailureClassification.failure_type,
-                func.count(FailureClassification.id).label("count"),
-            )
-            .group_by(FailureClassification.failure_type)
-        )
+        fc_stmt = select(
+            FailureClassification.failure_type,
+            func.count(FailureClassification.id).label("count"),
+        ).group_by(FailureClassification.failure_type)
         fc_result = await session.execute(fc_stmt)
         failures_by_type = [
             FailureBreakdown(failure_type=row.failure_type, count=row.count)
@@ -175,16 +171,13 @@ async def dashboard_stats() -> DashboardStatsResponse:
         ]
 
         # Remediation stats
-        ra_stmt = (
-            select(
-                RemediationAction.action_type,
-                func.count(RemediationAction.id).label("total"),
-                func.count(
-                    func.nullif(RemediationAction.status != "success", True)
-                ).label("successful"),
-            )
-            .group_by(RemediationAction.action_type)
-        )
+        ra_stmt = select(
+            RemediationAction.action_type,
+            func.count(RemediationAction.id).label("total"),
+            func.count(func.nullif(RemediationAction.status != "success", True)).label(
+                "successful"
+            ),
+        ).group_by(RemediationAction.action_type)
         ra_result = await session.execute(ra_stmt)
         remediation_stats = []
         for row in ra_result.all():

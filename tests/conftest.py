@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
-import pytest_asyncio
 
 from otelmind.watchdog.failure_detection import FailureDetector
 
@@ -41,6 +39,6 @@ def make_span(
     span.attributes = attributes or {}
     span.inputs = inputs
     span.outputs = outputs
-    span.start_time = datetime.now(timezone.utc)
-    span.end_time = datetime.now(timezone.utc)
+    span.start_time = datetime.now(UTC)
+    span.end_time = datetime.now(UTC)
     return span

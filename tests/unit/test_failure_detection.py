@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from otelmind.watchdog.failure_detection import FailureDetector
 from tests.conftest import make_span
 

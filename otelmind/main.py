@@ -10,6 +10,7 @@ Services launched:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import signal
 import sys
 from typing import Any
@@ -189,10 +190,8 @@ async def run() -> None:
 
 def main() -> None:
     """CLI entry point."""
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(run())
-    except KeyboardInterrupt:
-        pass
     sys.exit(0)
 
 
