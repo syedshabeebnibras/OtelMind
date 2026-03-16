@@ -166,8 +166,7 @@ async def dashboard_stats() -> DashboardStatsResponse:
         ).group_by(FailureClassification.failure_type)
         fc_result = await session.execute(fc_stmt)
         failures_by_type = [
-            FailureBreakdown(failure_type=row.failure_type, count=row.count)
-            for row in fc_result.all()
+            FailureBreakdown(failure_type=row[0], count=row[1]) for row in fc_result.all()
         ]
 
         # Remediation stats
