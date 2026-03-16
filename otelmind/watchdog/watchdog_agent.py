@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from loguru import logger
 from sqlalchemy import select
@@ -22,7 +22,7 @@ class WatchdogAgent:
     def __init__(self) -> None:
         self._detector = FailureDetector()
         self._running = False
-        self._last_check: datetime = datetime.now(timezone.utc) - timedelta(hours=1)
+        self._last_check: datetime = datetime.now(UTC) - timedelta(hours=1)
 
     async def start(self) -> None:
         """Start the watchdog loop."""
@@ -96,7 +96,7 @@ class WatchdogAgent:
                     engine = RemediationEngine(session)
                     await engine.remediate(fc)
 
-            self._last_check = datetime.now(timezone.utc)
+            self._last_check = datetime.now(UTC)
 
 
 async def run_watchdog() -> None:

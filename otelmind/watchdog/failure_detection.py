@@ -51,9 +51,7 @@ class FailureDetector:
 
     # ── Individual detectors ────────────────────────────────────────────
 
-    def _detect_tool_timeout(
-        self, trace_id: str, spans: list[Span]
-    ) -> list[DetectedFailure]:
+    def _detect_tool_timeout(self, trace_id: str, spans: list[Span]) -> list[DetectedFailure]:
         failures: list[DetectedFailure] = []
         for span in spans:
             if span.duration_ms and span.duration_ms > self.TIMEOUT_THRESHOLD_MS:
@@ -73,9 +71,7 @@ class FailureDetector:
                 )
         return failures
 
-    def _detect_infinite_loop(
-        self, trace_id: str, spans: list[Span]
-    ) -> list[DetectedFailure]:
+    def _detect_infinite_loop(self, trace_id: str, spans: list[Span]) -> list[DetectedFailure]:
         node_counts: dict[str, int] = {}
         for span in spans:
             node_counts[span.name] = node_counts.get(span.name, 0) + 1
@@ -98,14 +94,15 @@ class FailureDetector:
                 )
         return failures
 
-    def _detect_context_overflow(
-        self, trace_id: str, spans: list[Span]
-    ) -> list[DetectedFailure]:
+    def _detect_context_overflow(self, trace_id: str, spans: list[Span]) -> list[DetectedFailure]:
         failures: list[DetectedFailure] = []
         for span in spans:
             attrs = span.attributes or {}
             total_tokens = attrs.get("llm.token.total_tokens", 0)
-            if isinstance(total_tokens, (int, float)) and total_tokens > self.CONTEXT_TOKEN_THRESHOLD:
+            if (
+                isinstance(total_tokens, (int, float))
+                and total_tokens > self.CONTEXT_TOKEN_THRESHOLD
+            ):
                 failures.append(
                     DetectedFailure(
                         trace_id=trace_id,
@@ -121,9 +118,7 @@ class FailureDetector:
                 )
         return failures
 
-    def _detect_tool_misuse(
-        self, trace_id: str, spans: list[Span]
-    ) -> list[DetectedFailure]:
+    def _detect_tool_misuse(self, trace_id: str, spans: list[Span]) -> list[DetectedFailure]:
         failures: list[DetectedFailure] = []
         error_spans = [s for s in spans if s.status_code == "ERROR"]
         if len(error_spans) >= 2:
@@ -144,9 +139,7 @@ class FailureDetector:
             )
         return failures
 
-    def _detect_hallucination(
-        self, trace_id: str, spans: list[Span]
-    ) -> list[DetectedFailure]:
+    def _detect_hallucination(self, trace_id: str, spans: list[Span]) -> list[DetectedFailure]:
         """Simple heuristic: spans with LLM output but empty/null outputs may indicate hallucination issues."""
         failures: list[DetectedFailure] = []
         llm_spans = [s for s in spans if "llm" in s.name.lower() or "generate" in s.name.lower()]

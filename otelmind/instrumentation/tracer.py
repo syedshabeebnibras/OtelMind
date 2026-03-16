@@ -36,9 +36,7 @@ def init_tracer(
     """
     global _provider
 
-    resource = Resource.create(
-        {"service.name": service_name or settings.otel_service_name}
-    )
+    resource = Resource.create({"service.name": service_name or settings.otel_service_name})
     _provider = TracerProvider(resource=resource)
 
     span_exporter = exporter or ConsoleSpanExporter()

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 from otelmind.config import settings
 from otelmind.storage.models import FailureClassification
@@ -48,7 +47,7 @@ class RemediationEngine:
                 remediation_id=action.id,
                 status="success",
                 result=result,
-                executed_at=datetime.now(timezone.utc),
+                executed_at=datetime.now(UTC),
             )
             logger.info(
                 "Remediation {} executed successfully for trace {}",
@@ -60,7 +59,7 @@ class RemediationEngine:
                 remediation_id=action.id,
                 status="failed",
                 result={"error": str(exc)},
-                executed_at=datetime.now(timezone.utc),
+                executed_at=datetime.now(UTC),
             )
             logger.error(
                 "Remediation {} failed for trace {}: {}",
@@ -69,9 +68,7 @@ class RemediationEngine:
                 exc,
             )
 
-    def _build_parameters(
-        self, failure: FailureClassification, action_type: str
-    ) -> dict[str, Any]:
+    def _build_parameters(self, failure: FailureClassification, action_type: str) -> dict[str, Any]:
         """Build remediation parameters based on failure evidence."""
         params: dict[str, Any] = {
             "failure_type": failure.failure_type,

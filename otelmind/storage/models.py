@@ -26,9 +26,7 @@ class Trace(Base):
 
     __tablename__ = "traces"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     trace_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     service_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="ok")
@@ -36,9 +34,7 @@ class Trace(Base):
     end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     spans: Mapped[list[Span]] = relationship("Span", back_populates="trace", cascade="all,delete")
     token_counts: Mapped[list[TokenCount]] = relationship(
@@ -56,9 +52,7 @@ class Span(Base):
 
     __tablename__ = "spans"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     span_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     trace_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("traces.trace_id", ondelete="CASCADE"), nullable=False
@@ -75,9 +69,7 @@ class Span(Base):
     inputs: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     outputs: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     trace: Mapped[Trace] = relationship("Trace", back_populates="spans")
     tool_errors: Mapped[list[ToolError]] = relationship(
@@ -96,9 +88,7 @@ class TokenCount(Base):
 
     __tablename__ = "token_counts"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     trace_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("traces.trace_id", ondelete="CASCADE"), nullable=False
     )
@@ -107,9 +97,7 @@ class TokenCount(Base):
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     trace: Mapped[Trace] = relationship("Trace", back_populates="token_counts")
 
@@ -121,9 +109,7 @@ class ToolError(Base):
 
     __tablename__ = "tool_errors"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     span_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("spans.span_id", ondelete="CASCADE"), nullable=False
     )
@@ -131,9 +117,7 @@ class ToolError(Base):
     error_type: Mapped[str] = mapped_column(String(128), nullable=False)
     error_message: Mapped[str] = mapped_column(Text, nullable=False)
     stack_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     span: Mapped[Span] = relationship("Span", back_populates="tool_errors")
 
@@ -145,9 +129,7 @@ class FailureClassification(Base):
 
     __tablename__ = "failure_classifications"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     trace_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("traces.trace_id", ondelete="CASCADE"), nullable=False
     )
@@ -159,9 +141,7 @@ class FailureClassification(Base):
     detection_method: Mapped[str] = mapped_column(
         String(64), nullable=False, default="heuristic"
     )  # heuristic, pattern, llm_judge
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         Index("ix_failure_class_trace_id", "trace_id"),
@@ -174,9 +154,7 @@ class RemediationAction(Base):
 
     __tablename__ = "remediation_actions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     failure_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("failure_classifications.id", ondelete="CASCADE"),
@@ -192,9 +170,7 @@ class RemediationAction(Base):
     )  # pending, executed, success, failed
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         Index("ix_remediation_trace_id", "trace_id"),

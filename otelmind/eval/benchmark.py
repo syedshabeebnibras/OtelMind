@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -12,10 +13,10 @@ class TraceScenario:
     """A single test scenario with a trace and expected outcome."""
 
     name: str
-    trace: Dict[str, Any]
+    trace: dict[str, Any]
     expected_failure: bool
-    expected_root_cause: Optional[str] = None
-    expected_remediation: Optional[str] = None
+    expected_root_cause: str | None = None
+    expected_remediation: str | None = None
 
 
 @dataclass
@@ -29,7 +30,7 @@ class BenchmarkResults:
     remediation_attempted: int = 0
     remediation_succeeded: int = 0
     duration_seconds: float = 0.0
-    per_scenario: List[Dict[str, Any]] = field(default_factory=list)
+    per_scenario: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def accuracy(self) -> float:
@@ -42,7 +43,9 @@ class BenchmarkResults:
         total_negatives = self.total - (self.correct - self.false_positives + self.false_negatives)
         if total_negatives <= 0:
             return 0.0
-        return self.false_positives / (self.false_positives + (self.total - self.false_positives - self.false_negatives))
+        return self.false_positives / (
+            self.false_positives + (self.total - self.false_positives - self.false_negatives)
+        )
 
     @property
     def failure_rate(self) -> float:
@@ -67,10 +70,10 @@ class Benchmark:
 
     def __init__(
         self,
-        analyzer: Optional[Callable] = None,
-        remediator: Optional[Callable] = None,
+        analyzer: Callable | None = None,
+        remediator: Callable | None = None,
     ) -> None:
-        self._scenarios: List[TraceScenario] = []
+        self._scenarios: list[TraceScenario] = []
         self._analyzer = analyzer
         self._remediator = remediator
 
@@ -78,18 +81,16 @@ class Benchmark:
         """Register a test scenario."""
         self._scenarios.append(scenario)
 
-    def add_known_good(self, name: str, trace: Dict[str, Any]) -> None:
+    def add_known_good(self, name: str, trace: dict[str, Any]) -> None:
         """Add a known-good trace (should not be flagged as a failure)."""
-        self._scenarios.append(
-            TraceScenario(name=name, trace=trace, expected_failure=False)
-        )
+        self._scenarios.append(TraceScenario(name=name, trace=trace, expected_failure=False))
 
     def add_known_bad(
         self,
         name: str,
-        trace: Dict[str, Any],
-        root_cause: Optional[str] = None,
-        remediation: Optional[str] = None,
+        trace: dict[str, Any],
+        root_cause: str | None = None,
+        remediation: str | None = None,
     ) -> None:
         """Add a known-bad trace (should be flagged as a failure)."""
         self._scenarios.append(
@@ -125,9 +126,9 @@ class Benchmark:
         results.duration_seconds = time.monotonic() - start
         return results
 
-    def _evaluate_scenario(self, scenario: TraceScenario) -> Dict[str, Any]:
+    def _evaluate_scenario(self, scenario: TraceScenario) -> dict[str, Any]:
         """Evaluate a single scenario against the analyzer and remediator."""
-        outcome: Dict[str, Any] = {
+        outcome: dict[str, Any] = {
             "name": scenario.name,
             "expected_failure": scenario.expected_failure,
             "detected_failure": False,
@@ -154,9 +155,7 @@ class Benchmark:
             if detected and self._remediator is not None:
                 outcome["remediation_attempted"] = True
                 rem_result = self._remediator(scenario.trace, analysis)
-                outcome["remediation_succeeded"] = bool(
-                    rem_result.get("success", False)
-                )
+                outcome["remediation_succeeded"] = bool(rem_result.get("success", False))
         except Exception as exc:
             outcome["error"] = str(exc)
 

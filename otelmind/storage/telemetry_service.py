@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from otelmind.storage.models import (
@@ -59,15 +59,8 @@ class TelemetryService:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_traces(
-        self, *, limit: int = 50, offset: int = 0
-    ) -> list[Trace]:
-        stmt = (
-            select(Trace)
-            .order_by(Trace.start_time.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+    async def list_traces(self, *, limit: int = 50, offset: int = 0) -> list[Trace]:
+        stmt = select(Trace).order_by(Trace.start_time.desc()).limit(limit).offset(offset)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
@@ -194,7 +187,9 @@ class TelemetryService:
         )
         self._session.add(fc)
         await self._session.flush()
-        logger.info("Recorded failure {} for trace {} (conf={:.2f})", failure_type, trace_id, confidence)
+        logger.info(
+            "Recorded failure {} for trace {} (conf={:.2f})", failure_type, trace_id, confidence
+        )
         return fc
 
     async def list_failures(

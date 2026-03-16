@@ -7,9 +7,9 @@ The server processes each span and queues it for batch writing.
 
 from __future__ import annotations
 
-import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 import asyncpg
 from fastapi import FastAPI, Request

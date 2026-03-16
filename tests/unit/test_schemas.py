@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from otelmind.api.schemas import (
     HealthResponse,
@@ -52,7 +52,7 @@ class TestSchemas:
             trace_id="t1",
             service_name="test",
             status="ok",
-            start_time=datetime.now(timezone.utc),
-            created_at=datetime.now(timezone.utc),
+            start_time=datetime.now(UTC),
+            created_at=datetime.now(UTC),
         )
         assert t.trace_id == "t1"

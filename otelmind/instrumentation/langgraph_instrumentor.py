@@ -5,13 +5,12 @@ from __future__ import annotations
 import functools
 import json
 import time
-import traceback
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any, TypeVar
 
 from loguru import logger
-from opentelemetry import trace
 from opentelemetry.trace import StatusCode
 
 from otelmind.instrumentation.tracer import get_tracer
@@ -53,20 +52,16 @@ class LangGraphInstrumentor:
             @functools.wraps(fn)
             def wrapper(*args: Any, **kwargs: Any) -> Any:
                 tracer = get_tracer(self._tracer_name)
-                with tracer.start_as_current_span(
-                    f"langgraph.node.{node_name}"
-                ) as span:
+                with tracer.start_as_current_span(f"langgraph.node.{node_name}") as span:
                     span_ctx = span.get_span_context()
                     span_id = format(span_ctx.span_id, "032x")
                     trace_id = format(span_ctx.trace_id, "032x")
 
                     start = time.monotonic()
-                    start_dt = datetime.now(timezone.utc)
+                    start_dt = datetime.now(UTC)
 
                     # Capture inputs
-                    input_snapshot = _safe_serialize(
-                        args[0] if args else kwargs
-                    )
+                    input_snapshot = _safe_serialize(args[0] if args else kwargs)
                     span.set_attribute("langgraph.node.name", node_name)
                     span.set_attribute("langgraph.node.input", input_snapshot)
 
@@ -95,7 +90,7 @@ class LangGraphInstrumentor:
                         raise
                     finally:
                         end = time.monotonic()
-                        end_dt = datetime.now(timezone.utc)
+                        end_dt = datetime.now(UTC)
                         duration_ms = (end - start) * 1000
 
                         # Collect the record for later persistence
@@ -110,7 +105,11 @@ class LangGraphInstrumentor:
                             "end_time": end_dt.isoformat(),
                             "duration_ms": round(duration_ms, 3),
                             "inputs": input_snapshot if isinstance(input_snapshot, str) else None,
-                            "outputs": output_snapshot if status_code == "OK" and isinstance(output_snapshot, str) else None,
+                            "outputs": (
+                                output_snapshot
+                                if status_code == "OK" and isinstance(output_snapshot, str)
+                                else None
+                            ),
                             "error_message": error_message,
                             "attributes": {
                                 "langgraph.node.name": node_name,

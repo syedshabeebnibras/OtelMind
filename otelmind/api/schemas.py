@@ -8,8 +8,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-
 # ── Traces ──────────────────────────────────────────────────────────────
+
 
 class TraceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -30,6 +30,7 @@ class TraceDetailResponse(TraceResponse):
 
 
 # ── Spans ───────────────────────────────────────────────────────────────
+
 
 class SpanResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -53,6 +54,7 @@ class SpanResponse(BaseModel):
 
 # ── Failures ────────────────────────────────────────────────────────────
 
+
 class FailureResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -67,6 +69,7 @@ class FailureResponse(BaseModel):
 
 # ── Metrics ─────────────────────────────────────────────────────────────
 
+
 class MetricsResponse(BaseModel):
     total_traces: int
     total_spans: int
@@ -77,6 +80,7 @@ class MetricsResponse(BaseModel):
 
 
 # ── Dashboard ───────────────────────────────────────────────────────────
+
 
 class FailureBreakdown(BaseModel):
     failure_type: str
@@ -103,6 +107,7 @@ class DashboardStatsResponse(BaseModel):
 
 # ── Span Ingestion ──────────────────────────────────────────────────────
 
+
 class SpanIngestRequest(BaseModel):
     span_id: str
     trace_id: str
@@ -125,6 +130,7 @@ class IngestResponse(BaseModel):
 
 
 # ── Health ──────────────────────────────────────────────────────────────
+
 
 class HealthResponse(BaseModel):
     status: str = "healthy"

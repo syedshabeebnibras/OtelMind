@@ -50,7 +50,7 @@ class SwapToolStrategy(RemediationStrategy):
             return self._mappings
 
         try:
-            with open(self._fallback_path, "r") as fh:
+            with open(self._fallback_path) as fh:
                 raw = yaml.safe_load(fh)
             if not isinstance(raw, dict):
                 logger.error(
