@@ -1,0 +1,160 @@
+"""Application configuration via environment variables using dataclasses."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+def _env(key: str, default: str = "") -> str:
+    """Read an environment variable with a fallback default."""
+    return os.getenv(key, default)
+
+
+def _env_int(key: str, default: int = 0) -> int:
+    """Read an environment variable as int."""
+    val = os.getenv(key)
+    if val is None:
+        return default
+    return int(val)
+
+
+def _env_bool(key: str, default: bool = False) -> bool:
+    """Read an environment variable as bool."""
+    val = os.getenv(key)
+    if val is None:
+        return default
+    return val.lower() in ("1", "true", "yes")
+
+
+# ---------------------------------------------------------------------------
+# Sub-configs
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class DatabaseConfig:
+    """Database connection settings."""
+
+    host: str = field(default_factory=lambda: _env("POSTGRES_HOST", "localhost"))
+    port: int = field(default_factory=lambda: _env_int("POSTGRES_PORT", 5432))
+    database: str = field(default_factory=lambda: _env("POSTGRES_DB", "otelmind"))
+    user: str = field(default_factory=lambda: _env("POSTGRES_USER", "otelmind"))
+    password: str = field(default_factory=lambda: _env("POSTGRES_PASSWORD", "otelmind"))
+
+
+@dataclass
+class LLMConfig:
+    """LLM provider settings."""
+
+    provider: str = field(default_factory=lambda: _env("LLM_PROVIDER", "openai"))
+    model: str = field(default_factory=lambda: _env("LLM_MODEL", "gpt-4"))
+    api_key: str = field(default_factory=lambda: _env("LLM_API_KEY"))
+    api_base: str = field(default_factory=lambda: _env("LLM_API_BASE"))
+    api_version: str = field(default_factory=lambda: _env("LLM_API_VERSION"))
+
+
+@dataclass
+class OtelConfig:
+    """OpenTelemetry settings."""
+
+    endpoint: str = field(
+        default_factory=lambda: _env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"),
+    )
+    service_name: str = field(default_factory=lambda: _env("OTEL_SERVICE_NAME", "otelmind"))
+
+
+@dataclass
+class RemediationConfig:
+    """Remediation / retry settings."""
+
+    retry_max_attempts: int = field(default_factory=lambda: _env_int("RETRY_MAX_ATTEMPTS", 3))
+    retry_backoff_base: float = field(
+        default_factory=lambda: float(_env("RETRY_BACKOFF_BASE", "2.0")),
+    )
+    escalation_webhook_url: str = field(
+        default_factory=lambda: _env("ESCALATION_WEBHOOK_URL"),
+    )
+    fallback_tool_registry: str = field(
+        default_factory=lambda: _env("FALLBACK_TOOL_REGISTRY"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Root config
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AppConfig:
+    """Top-level application configuration that aggregates all sub-configs."""
+
+    db: DatabaseConfig = field(default_factory=DatabaseConfig)
+    llm: LLMConfig = field(default_factory=LLMConfig)
+    otel: OtelConfig = field(default_factory=OtelConfig)
+    remediation: RemediationConfig = field(default_factory=RemediationConfig)
+
+    # API settings
+    api_host: str = field(default_factory=lambda: _env("API_HOST", "0.0.0.0"))
+    api_port: int = field(default_factory=lambda: _env_int("API_PORT", 8000))
+
+    # Watchdog settings
+    watchdog_interval_seconds: int = field(
+        default_factory=lambda: _env_int("WATCHDOG_INTERVAL_SECONDS", 30),
+    )
+    watchdog_llm_judge_enabled: bool = field(
+        default_factory=lambda: _env_bool("WATCHDOG_LLM_JUDGE_ENABLED", False),
+    )
+
+    # API reload flag
+    api_reload: bool = field(default_factory=lambda: _env_bool("API_RELOAD", False))
+
+    # DB pool tuning
+    db_pool_size: int = field(default_factory=lambda: _env_int("DB_POOL_SIZE", 20))
+    db_max_overflow: int = field(default_factory=lambda: _env_int("DB_MAX_OVERFLOW", 10))
+
+    # ------------------------------------------------------------------
+    # Backward-compatible computed properties
+    # ------------------------------------------------------------------
+
+    @property
+    def database_url(self) -> str:
+        """Async database URL built from DatabaseConfig fields."""
+        return (
+            f"postgresql+asyncpg://{self.db.user}:{self.db.password}"
+            f"@{self.db.host}:{self.db.port}/{self.db.database}"
+        )
+
+    @property
+    def database_url_sync(self) -> str:
+        """Synchronous database URL built from DatabaseConfig fields."""
+        return (
+            f"postgresql://{self.db.user}:{self.db.password}"
+            f"@{self.db.host}:{self.db.port}/{self.db.database}"
+        )
+
+    @property
+    def remediation_webhook_url(self) -> str:
+        """Alias for remediation.escalation_webhook_url."""
+        return self.remediation.escalation_webhook_url
+
+    @property
+    def remediation_max_retries(self) -> int:
+        """Alias for remediation.retry_max_attempts."""
+        return self.remediation.retry_max_attempts
+
+    @property
+    def otel_service_name(self) -> str:
+        """Alias for otel.service_name."""
+        return self.otel.service_name
+
+
+# ---------------------------------------------------------------------------
+# Module-level singleton for backward compatibility
+# ---------------------------------------------------------------------------
+
+settings = AppConfig()

@@ -1,0 +1,98 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: otelmind-postgres
+    environment:
+      POSTGRES_USER: otelmind
+      POSTGRES_PASSWORD: otelmind
+      POSTGRES_DB: otelmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U otelmind"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      target: base
+    container_name: otelmind-migrate
+    command: alembic upgrade head
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: otelmind
+      POSTGRES_USER: otelmind
+      POSTGRES_PASSWORD: otelmind
+      DATABASE_URL_SYNC: postgresql://otelmind:otelmind@postgres:5432/otelmind
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      target: api
+    container_name: otelmind-api
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: otelmind
+      POSTGRES_USER: otelmind
+      POSTGRES_PASSWORD: otelmind
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
+      WATCHDOG_INTERVAL_SECONDS: "30"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: .
+      target: base
+    container_name: otelmind-collector
+    command: python -m uvicorn otelmind.collector.server:app --host 0.0.0.0 --port 4318
+    ports:
+      - "4318:4318"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: otelmind
+      POSTGRES_USER: otelmind
+      POSTGRES_PASSWORD: otelmind
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  watchdog:
+    build:
+      context: .
+      target: watchdog
+    container_name: otelmind-watchdog
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: otelmind
+      POSTGRES_USER: otelmind
+      POSTGRES_PASSWORD: otelmind
+      WATCHDOG_INTERVAL_SECONDS: "30"
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      ESCALATION_WEBHOOK_URL: ${ESCALATION_WEBHOOK_URL:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:

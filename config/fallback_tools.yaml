@@ -1,0 +1,13 @@
+# Tool fallback mappings
+# When a primary tool fails or is unavailable, the system will
+# attempt to use the configured fallback alternative.
+
+fallback_tools:
+  serpapi: tavily
+  tavily: serpapi
+  sql_query: read_csv
+  read_csv: sql_query
+  web_search: web_scrape
+  web_scrape: web_search
+  code_interpreter: python_exec
+  python_exec: code_interpreter

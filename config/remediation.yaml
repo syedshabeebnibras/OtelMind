@@ -1,0 +1,41 @@
+# Remediation strategy configuration
+
+retry:
+  max_attempts: 3
+  backoff_base: 2          # exponential backoff base in seconds
+  backoff_max: 30           # maximum backoff delay in seconds
+  jitter: true
+
+escalation:
+  enabled: true
+  webhook_url: "https://hooks.example.com/otelmind/escalate"
+  notify_on:
+    - repeated_failure
+    - critical_error
+
+strategies:
+  tool_not_found:
+    action: fallback
+    description: "Switch to a fallback tool from fallback_tools.yaml"
+
+  timeout:
+    action: retry
+    description: "Retry with exponential backoff"
+
+  rate_limit:
+    action: retry
+    description: "Retry after backoff delay"
+    override:
+      backoff_base: 5
+
+  invalid_input:
+    action: rewrite
+    description: "Rewrite the tool input and retry"
+
+  model_error:
+    action: escalate
+    description: "Escalate to external webhook for manual review"
+
+  permission_denied:
+    action: escalate
+    description: "Escalate — cannot be auto-remediated"
