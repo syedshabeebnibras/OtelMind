@@ -73,7 +73,7 @@ class SpanProcessor:
         )
 
     async def _persist_span(self, record: dict[str, Any]) -> None:
-        """Persist a single span record."""
+        """Persist a single span record and extract token counts if present."""
         inputs = _try_parse_json(record.get("inputs"))
         outputs = _try_parse_json(record.get("outputs"))
 
@@ -92,6 +92,20 @@ class SpanProcessor:
             outputs=outputs,
             error_message=record.get("error_message"),
         )
+
+        # Extract and persist token counts from attributes
+        attrs = record.get("attributes") or {}
+        prompt_tokens = attrs.get("llm.token.prompt_tokens", 0)
+        completion_tokens = attrs.get("llm.token.completion_tokens", 0)
+        if prompt_tokens or completion_tokens:
+            model_name = attrs.get("llm.model", "unknown")
+            await self._svc.record_token_usage(
+                trace_id=record["trace_id"],
+                model_name=model_name,
+                prompt_tokens=int(prompt_tokens),
+                completion_tokens=int(completion_tokens),
+                span_id=record["span_id"],
+            )
 
 
 def _parse_dt(value: str | datetime) -> datetime:

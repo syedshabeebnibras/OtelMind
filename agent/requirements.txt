@@ -1,0 +1,2 @@
+# Agent-specific dependencies (in addition to root requirements.txt)
+langchain-openai>=0.2.0
