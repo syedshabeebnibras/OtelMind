@@ -102,7 +102,9 @@ class WatchdogAgent:
                         router_ar = AlertRouter(session)
                         reasoning = str((failure.evidence or {}).get("reasoning") or "")[:900]
                         if not reasoning:
-                            reasoning = f"{failure.failure_type} (confidence {failure.confidence:.0%})"
+                            reasoning = (
+                                f"{failure.failure_type} (confidence {failure.confidence:.0%})"
+                            )
                         await router_ar.dispatch(fc, trace_obj.service_name, reasoning)
                         fc.alerted = True
                     except Exception:

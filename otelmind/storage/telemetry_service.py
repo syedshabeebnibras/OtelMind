@@ -127,11 +127,7 @@ class TelemetryService:
             end_time=end_time,
         )
         stmt = (
-            select(Trace)
-            .where(flt)
-            .order_by(Trace.start_time.desc())
-            .limit(limit)
-            .offset(offset)
+            select(Trace).where(flt).order_by(Trace.start_time.desc()).limit(limit).offset(offset)
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
@@ -319,7 +315,9 @@ class TelemetryService:
         )
         self._session.add(ra)
         await self._session.flush()
-        logger.info("Recorded remediation {} failure {} tenant={}", action_type, failure_id, tenant_id)
+        logger.info(
+            "Recorded remediation {} failure {} tenant={}", action_type, failure_id, tenant_id
+        )
         return ra
 
     async def update_remediation_status(

@@ -117,6 +117,26 @@ class AppConfig:
     db_pool_size: int = field(default_factory=lambda: _env_int("DB_POOL_SIZE", 20))
     db_max_overflow: int = field(default_factory=lambda: _env_int("DB_MAX_OVERFLOW", 10))
 
+    # Redis
+    redis_url: str = field(default_factory=lambda: _env("REDIS_URL", "redis://localhost:6379"))
+
+    # Auth / API keys
+    secret_key: str = field(default_factory=lambda: _env("SECRET_KEY", "change-me-in-production"))
+    api_key_prefix: str = field(default_factory=lambda: _env("API_KEY_PREFIX", "om_"))
+
+    # Rate limits (requests per minute per tenant)
+    rate_limit_ingest: int = field(default_factory=lambda: _env_int("RATE_LIMIT_INGEST", 10_000))
+    rate_limit_read: int = field(default_factory=lambda: _env_int("RATE_LIMIT_READ", 500))
+
+    # Alerting
+    slack_default_webhook: str = field(default_factory=lambda: _env("SLACK_WEBHOOK_URL", ""))
+    pagerduty_routing_key: str = field(default_factory=lambda: _env("PAGERDUTY_ROUTING_KEY", ""))
+    alert_email_from: str = field(default_factory=lambda: _env("ALERT_EMAIL_FROM", ""))
+    smtp_host: str = field(default_factory=lambda: _env("SMTP_HOST", ""))
+    smtp_port: int = field(default_factory=lambda: _env_int("SMTP_PORT", 587))
+    smtp_user: str = field(default_factory=lambda: _env("SMTP_USER", ""))
+    smtp_password: str = field(default_factory=lambda: _env("SMTP_PASSWORD", ""))
+
     # ------------------------------------------------------------------
     # Backward-compatible computed properties
     # ------------------------------------------------------------------
