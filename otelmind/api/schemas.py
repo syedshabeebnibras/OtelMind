@@ -231,6 +231,34 @@ class AlertRuleUpdateRequest(BaseModel):
     channels: list[str] | None = None
 
 
+class AlertChannelPublic(BaseModel):
+    id: str
+    name: str
+    channel_type: str  # slack | pagerduty | email | webhook
+    config: dict[str, Any]
+    is_active: bool
+    created_at: datetime
+
+
+class AlertChannelsResponse(BaseModel):
+    items: list[AlertChannelPublic]
+
+
+class AlertChannelCreateRequest(BaseModel):
+    name: str
+    channel_type: str  # slack | pagerduty | email | webhook
+    config: dict[
+        str, Any
+    ]  # e.g. {"webhook_url": "..."} or {"routing_key": "..."} or {"to": ["..."]}
+    is_active: bool = True
+
+
+class AlertChannelUpdateRequest(BaseModel):
+    name: str | None = None
+    config: dict[str, Any] | None = None
+    is_active: bool | None = None
+
+
 class EvalRunPublic(BaseModel):
     id: str
     name: str

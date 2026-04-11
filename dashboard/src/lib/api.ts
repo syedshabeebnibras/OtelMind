@@ -135,6 +135,19 @@ export interface AlertRulesResponse {
   items: AlertRule[];
 }
 
+export interface AlertChannel {
+  id: string;
+  name: string;
+  channel_type: "slack" | "pagerduty" | "email" | "webhook";
+  config: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AlertChannelsResponse {
+  items: AlertChannel[];
+}
+
 export interface EvalRun {
   id: string;
   name: string;
@@ -244,6 +257,39 @@ export const api = {
 
     delete(id: string): Promise<void> {
       return request<void>(`/alerts/${id}`, { method: "DELETE" });
+    },
+
+    // Channel CRUD — destinations that rules route to. Storing the
+    // actual webhook URL / routing key / email address lives on the
+    // channel, so ops can rotate a Slack webhook without touching
+    // every rule that uses it.
+    channels: {
+      list(): Promise<AlertChannelsResponse> {
+        return request<AlertChannelsResponse>("/alerts/channels");
+      },
+      create(body: {
+        name: string;
+        channel_type: AlertChannel["channel_type"];
+        config: Record<string, unknown>;
+        is_active?: boolean;
+      }): Promise<AlertChannel> {
+        return request<AlertChannel>("/alerts/channels", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+      },
+      update(
+        id: string,
+        patch: Partial<Pick<AlertChannel, "name" | "config" | "is_active">>
+      ): Promise<AlertChannel> {
+        return request<AlertChannel>(`/alerts/channels/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        });
+      },
+      delete(id: string): Promise<void> {
+        return request<void>(`/alerts/channels/${id}`, { method: "DELETE" });
+      },
     },
   },
 

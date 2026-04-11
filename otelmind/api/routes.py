@@ -15,6 +15,10 @@ from sqlalchemy.orm import selectinload
 from otelmind.api.auth import CurrentTenant, require_scope
 from otelmind.api.rate_limit import enforce_tenant_rate_limit
 from otelmind.api.schemas import (
+    AlertChannelCreateRequest,
+    AlertChannelPublic,
+    AlertChannelsResponse,
+    AlertChannelUpdateRequest,
     AlertRuleCreateRequest,
     AlertRulePublic,
     AlertRulesResponsePublic,
@@ -734,6 +738,121 @@ async def delete_alert_rule(
         if rule is None:
             raise HTTPException(status_code=404, detail="Alert rule not found")
         await session.delete(rule)
+
+
+# ── Alert channels (destinations: Slack webhooks, PagerDuty keys, etc.) ──
+
+
+def _channel_to_public(c: AlertChannel) -> AlertChannelPublic:
+    return AlertChannelPublic(
+        id=str(c.id),
+        name=c.name,
+        channel_type=c.channel_type,
+        config=c.config or {},
+        is_active=c.is_active,
+        created_at=c.created_at,
+    )
+
+
+@router.get("/alerts/channels", response_model=AlertChannelsResponse)
+async def list_alert_channels(
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("read", "admin"))],
+) -> AlertChannelsResponse:
+    """Return every configured alert channel for the tenant (Slack,
+    PagerDuty, email, webhook)."""
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    async with get_session() as session:
+        stmt = (
+            select(AlertChannel)
+            .where(AlertChannel.tenant_id == tenant.id)
+            .order_by(AlertChannel.created_at.desc())
+        )
+        rows = list((await session.execute(stmt)).scalars().all())
+    return AlertChannelsResponse(items=[_channel_to_public(c) for c in rows])
+
+
+@router.post("/alerts/channels", response_model=AlertChannelPublic, status_code=201)
+async def create_alert_channel(
+    body: AlertChannelCreateRequest,
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("write", "admin"))],
+) -> AlertChannelPublic:
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    import uuid as _uuid
+
+    if body.channel_type not in {"slack", "pagerduty", "email", "webhook"}:
+        raise HTTPException(
+            status_code=400,
+            detail="channel_type must be one of: slack, pagerduty, email, webhook",
+        )
+
+    async with get_session() as session:
+        channel = AlertChannel(
+            id=_uuid.uuid4(),
+            tenant_id=tenant.id,
+            name=body.name,
+            channel_type=body.channel_type,
+            config=body.config,
+            is_active=body.is_active,
+        )
+        session.add(channel)
+        await session.flush()
+    return _channel_to_public(channel)
+
+
+@router.patch("/alerts/channels/{channel_id}", response_model=AlertChannelPublic)
+async def update_alert_channel(
+    channel_id: str,
+    body: AlertChannelUpdateRequest,
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("write", "admin"))],
+) -> AlertChannelPublic:
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    import uuid as _uuid
+
+    async with get_session() as session:
+        channel = await session.scalar(
+            select(AlertChannel).where(
+                AlertChannel.tenant_id == tenant.id,
+                AlertChannel.id == _uuid.UUID(channel_id),
+            )
+        )
+        if channel is None:
+            raise HTTPException(status_code=404, detail="Alert channel not found")
+        if body.name is not None:
+            channel.name = body.name
+        if body.config is not None:
+            channel.config = body.config
+        if body.is_active is not None:
+            channel.is_active = body.is_active
+        await session.flush()
+    return _channel_to_public(channel)
+
+
+@router.delete("/alerts/channels/{channel_id}", status_code=204)
+async def delete_alert_channel(
+    channel_id: str,
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("write", "admin"))],
+) -> None:
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    import uuid as _uuid
+
+    async with get_session() as session:
+        channel = await session.scalar(
+            select(AlertChannel).where(
+                AlertChannel.tenant_id == tenant.id,
+                AlertChannel.id == _uuid.UUID(channel_id),
+            )
+        )
+        if channel is None:
+            raise HTTPException(status_code=404, detail="Alert channel not found")
+        await session.delete(channel)
 
 
 # ── Eval runs ───────────────────────────────────────────────────────────

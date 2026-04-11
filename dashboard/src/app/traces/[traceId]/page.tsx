@@ -1,8 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Clock, Coins, ChevronRight, X, AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  Clock,
+  Coins,
+  ChevronRight,
+  X,
+  AlertCircle,
+  FlaskConical,
+  RefreshCw,
+} from "lucide-react";
 import { useTrace } from "@/hooks/use-traces";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -282,19 +292,69 @@ export default function TraceDetailPage({
 }: {
   params: { traceId: string };
 }) {
-  const { trace, isLoading, isError } = useTrace(params.traceId);
+  const router = useRouter();
+
+  // Eval-originated failures are stored in failure_classifications with a
+  // fabricated trace_id of the form `eval-<run_uuid>` because the
+  // failure row's trace_id column is NOT NULL. Those "traces" don't
+  // exist in the traces table — redirect straight to the eval run view
+  // instead of trying to fetch them.
+  const isEvalFailure = params.traceId?.startsWith("eval-");
+  const evalRunId = isEvalFailure ? params.traceId.slice(5) : null;
+
+  useEffect(() => {
+    if (isEvalFailure && evalRunId) {
+      router.replace(`/evals?run=${evalRunId}`);
+    }
+  }, [isEvalFailure, evalRunId, router]);
+
+  // Skip the fetch entirely when it's an eval failure — the `null`
+  // traceId means useTrace short-circuits to no SWR key.
+  const { trace, isLoading, isError, mutate } = useTrace(
+    isEvalFailure ? null : params.traceId
+  );
   const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
+
+  if (isEvalFailure) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center h-64 gap-4">
+        <FlaskConical className="h-8 w-8 text-blue-400" />
+        <p className="text-slate-300 text-sm">
+          This alert came from an eval run, not a live agent trace.
+        </p>
+        <Link href={`/evals?run=${evalRunId}`}>
+          <Button variant="outline" size="sm" className="gap-2">
+            View eval run
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   if (isError) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <AlertCircle className="h-8 w-8 text-amber-400" />
         <p className="text-slate-400 text-sm">Failed to load trace</p>
-        <Link href="/traces">
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="h-4 w-4" />
-            Back to traces
+        <p className="text-slate-500 text-xs font-mono">{params.traceId}</p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => mutate()}
+            className="gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry
           </Button>
-        </Link>
+          <Link href="/traces">
+            <Button variant="outline" size="sm" className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to traces
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
