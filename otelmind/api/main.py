@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from loguru import logger
 
 from otelmind import __version__
+from otelmind.api.middleware import register_middleware
 from otelmind.api.routes import router
 from otelmind.config import settings
 from otelmind.instrumentation.tracer import init_tracer, shutdown_tracer
@@ -45,6 +46,8 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+register_middleware(app)
 
 # Mount routes at both /api/v1 (versioned) and /api + / (guide-compatible)
 app.include_router(router, prefix="/api/v1")

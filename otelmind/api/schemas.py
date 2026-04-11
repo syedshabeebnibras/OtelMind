@@ -137,3 +137,82 @@ class HealthResponse(BaseModel):
     service: str = "otelmind-api"
     database: str = "connected"
     version: str
+
+
+# ── Dashboard / list envelopes (Next.js UI) ─────────────────────────────
+
+
+class TraceListItem(BaseModel):
+    trace_id: str
+    service_name: str
+    status: str
+    duration_ms: float
+    created_at: datetime
+    span_count: int | None = None
+    model: str | None = None
+
+
+class TracesListResponse(BaseModel):
+    items: list[TraceListItem]
+    total: int
+    next_cursor: str | None = None
+    prev_cursor: str | None = None
+
+
+class FailureListItem(BaseModel):
+    id: str
+    trace_id: str
+    failure_type: str
+    confidence: float
+    detection_method: str
+    timestamp: datetime
+    service_name: str | None = None
+    error_message: str | None = None
+
+
+class FailuresListResponse(BaseModel):
+    items: list[FailureListItem]
+    total: int
+    next_cursor: str | None = None
+    prev_cursor: str | None = None
+
+
+class CostBreakdownItemPublic(BaseModel):
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost: float
+    trace_count: int = 0
+
+
+class CostBreakdownResponsePublic(BaseModel):
+    items: list[CostBreakdownItemPublic]
+    total_cost: float
+    period_start: str
+    period_end: str
+    daily_spend: list[dict[str, float | str]]
+
+
+class DashboardStatsPublic(BaseModel):
+    total_traces: int
+    total_failures: int
+    failure_rate: float
+    avg_duration_ms: float
+    total_cost_usd: float
+    active_services: int
+    failures_by_type: dict[str, int]
+    traces_by_status: dict[str, int]
+
+
+class AlertRulePublic(BaseModel):
+    id: str
+    failure_type: str
+    threshold: float
+    channels: list[str]
+    enabled: bool
+    created_at: datetime
+
+
+class AlertRulesResponsePublic(BaseModel):
+    items: list[AlertRulePublic]

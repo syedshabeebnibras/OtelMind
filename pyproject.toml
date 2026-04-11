@@ -31,7 +31,12 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.22.0",
     "langgraph>=0.0.40",
     "langchain-core>=0.1.20",
+    "redis>=5.0.0",
+    "sse-starlette>=2.0.0",
 ]
+
+[project.scripts]
+otelmind-bootstrap = "otelmind.cli.bootstrap_tenant:main"
 
 [project.optional-dependencies]
 dev = [
