@@ -1,0 +1,33 @@
+# Railway only needs the Python backend. Exclude everything else
+# from the upload so builds stay fast.
+
+# Next.js dashboard — deployed separately to Vercel.
+dashboard/
+
+# JS SDK — not used at runtime.
+sdk-js/
+
+# MCP server — separate deployment, optional.
+mcp_server/
+
+# Large stuff not needed at runtime.
+*.log
+.venv/
+venv/
+.next/
+node_modules/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Secrets — Railway env vars hold these instead.
+.env
+.env.local
+.env.production
+
+# Test and docs
+tests/
+docs/
+README.md
