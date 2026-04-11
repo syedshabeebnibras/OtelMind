@@ -252,8 +252,34 @@ class EvalRunsListResponse(BaseModel):
     total: int
 
 
+class EvalCaseInput(BaseModel):
+    id: str
+    question: str
+    expected: str = ""
+    actual: str = ""
+    context: str = ""
+
+
 class EvalRunCreateRequest(BaseModel):
     name: str
     baseline: str | None = None
     candidate: str | None = None
     dataset: str | None = None
+    # If provided, the eval worker will run run_regression() against
+    # these cases and write scores back to the same row. If omitted, the
+    # run is recorded as an empty receipt for CI to fill in later.
+    baseline_cases: list[EvalCaseInput] | None = None
+    candidate_cases: list[EvalCaseInput] | None = None
+
+
+class QualityDimension(BaseModel):
+    dimension: str
+    mean_score: float
+    sample_count: int
+
+
+class QualityKpiResponse(BaseModel):
+    window_hours: int
+    scored_traces: int
+    dimensions: list[QualityDimension]
+    daily_trend: list[dict[str, float | str]]

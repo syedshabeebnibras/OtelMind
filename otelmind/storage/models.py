@@ -385,6 +385,34 @@ class FailureClassification(Base):
     )
 
 
+class TraceScore(Base):
+    """Per-dimension LLM-judge score for a sampled production trace.
+
+    Written by the auto-scoring background loop (otelmind/eval/worker.py).
+    One row per (trace_id, dimension) — `faithfulness`, `relevance`,
+    `coherence`, `safety`, `tool_use_accuracy`. The dashboard computes
+    rolling-24h means over this table for continuous-quality KPIs.
+    """
+
+    __tablename__ = "trace_scores"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    trace_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    dimension: Mapped[str] = mapped_column(String(64), nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    raw_score: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    method: Mapped[str] = mapped_column(String(32), nullable=False, default="llm")
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_trace_scores_tenant_created", "tenant_id", "created_at"),
+        Index("ix_trace_scores_trace_id", "trace_id"),
+        Index("ix_trace_scores_dimension", "tenant_id", "dimension", "created_at"),
+    )
+
+
 class EvalRun(Base):
     """Persisted result of an evaluation / regression run.
 
