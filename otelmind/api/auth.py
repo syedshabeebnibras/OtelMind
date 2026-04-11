@@ -127,9 +127,7 @@ def require_scope(*allowed: str):
 # An API key with scope "read" implicitly grants every `*:read` permission,
 # so existing integrations keep working after the RBAC rollout.
 _SCOPE_TO_PERMISSIONS: dict[str, frozenset[str]] = {
-    "read": frozenset(
-        {"traces:read", "failures:read", "cost:read", "evals:read", "alerts:read"}
-    ),
+    "read": frozenset({"traces:read", "failures:read", "cost:read", "evals:read", "alerts:read"}),
     "ingest": frozenset({"traces:write", "spans:write"}),
     "write": frozenset({"traces:write", "alerts:write", "evals:write"}),
     "admin": frozenset({"*"}),
