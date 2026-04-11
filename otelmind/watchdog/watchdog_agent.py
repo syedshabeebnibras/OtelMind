@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from loguru import logger
 from sqlalchemy import select
 
+from otelmind.alerting.alert_router import AlertRouter
 from otelmind.config import settings
 from otelmind.db import get_session
 from otelmind.remediation.remediation_engine import RemediationEngine
@@ -66,14 +67,18 @@ class WatchdogAgent:
                 # Check if already classified
                 existing = await session.execute(
                     select(FailureClassification).where(
-                        FailureClassification.trace_id == trace_obj.trace_id
+                        FailureClassification.tenant_id == trace_obj.tenant_id,
+                        FailureClassification.trace_id == trace_obj.trace_id,
                     )
                 )
                 if existing.scalars().first():
                     continue
 
                 # Load spans for this trace
-                span_stmt = select(Span).where(Span.trace_id == trace_obj.trace_id)
+                span_stmt = select(Span).where(
+                    Span.tenant_id == trace_obj.tenant_id,
+                    Span.trace_id == trace_obj.trace_id,
+                )
                 span_result = await session.execute(span_stmt)
                 spans = list(span_result.scalars().all())
 
@@ -85,6 +90,7 @@ class WatchdogAgent:
 
                 for failure in failures:
                     fc = await svc.record_failure(
+                        trace_obj.tenant_id,
                         trace_id=failure.trace_id,
                         failure_type=failure.failure_type,
                         confidence=failure.confidence,
@@ -92,7 +98,16 @@ class WatchdogAgent:
                         detection_method=failure.detection_method,
                     )
 
-                    # Trigger remediation
+                    try:
+                        router_ar = AlertRouter(session)
+                        reasoning = str((failure.evidence or {}).get("reasoning") or "")[:900]
+                        if not reasoning:
+                            reasoning = f"{failure.failure_type} (confidence {failure.confidence:.0%})"
+                        await router_ar.dispatch(fc, trace_obj.service_name, reasoning)
+                        fc.alerted = True
+                    except Exception:
+                        logger.exception("Alert dispatch failed for trace {}", failure.trace_id)
+
                     engine = RemediationEngine(session)
                     await engine.remediate(fc)
 

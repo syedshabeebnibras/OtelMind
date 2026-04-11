@@ -35,6 +35,7 @@ class RemediationEngine:
         parameters = self._build_parameters(failure, action_type)
 
         action = await self._svc.record_remediation(
+            failure.tenant_id,
             failure_id=failure.id,
             trace_id=failure.trace_id,
             action_type=action_type,

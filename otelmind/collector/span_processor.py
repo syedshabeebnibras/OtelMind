@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,8 +19,8 @@ class SpanProcessor:
     def __init__(self, session: AsyncSession) -> None:
         self._svc = TelemetryService(session)
 
-    async def process_spans(self, span_records: list[dict[str, Any]]) -> int:
-        """Ingest a batch of span records. Returns count of spans persisted."""
+    async def process_spans(self, tenant_id: uuid.UUID, span_records: list[dict[str, Any]]) -> int:
+        """Ingest a batch of span records for one tenant. Returns count of spans persisted."""
         if not span_records:
             return 0
 
@@ -31,17 +32,19 @@ class SpanProcessor:
 
         persisted = 0
         for trace_id, spans in traces.items():
-            await self._ensure_trace(trace_id, spans)
+            await self._ensure_trace(tenant_id, trace_id, spans)
             for span_rec in spans:
-                await self._persist_span(span_rec)
+                await self._persist_span(tenant_id, span_rec)
                 persisted += 1
 
-        logger.info("Processed {} spans across {} traces", persisted, len(traces))
+        logger.info("Processed {} spans across {} traces tenant={}", persisted, len(traces), tenant_id)
         return persisted
 
-    async def _ensure_trace(self, trace_id: str, spans: list[dict[str, Any]]) -> None:
+    async def _ensure_trace(
+        self, tenant_id: uuid.UUID, trace_id: str, spans: list[dict[str, Any]]
+    ) -> None:
         """Create trace record if it doesn't already exist."""
-        existing = await self._svc.get_trace(trace_id)
+        existing = await self._svc.get_trace(tenant_id, trace_id)
         if existing:
             return
 
@@ -56,22 +59,25 @@ class SpanProcessor:
             duration_ms = (end_time - start_time).total_seconds() * 1000
 
         has_error = any(s.get("status_code") == "ERROR" for s in spans)
+        service_name = _infer_service_name(spans)
 
         await self._svc.create_trace(
+            tenant_id,
             trace_id=trace_id,
-            service_name="otelmind",
+            service_name=service_name,
             start_time=start_time,
             end_time=end_time,
             duration_ms=duration_ms,
             status="error" if has_error else "ok",
         )
 
-    async def _persist_span(self, record: dict[str, Any]) -> None:
+    async def _persist_span(self, tenant_id: uuid.UUID, record: dict[str, Any]) -> None:
         """Persist a single span record and extract token counts if present."""
         inputs = _try_parse_json(record.get("inputs"))
         outputs = _try_parse_json(record.get("outputs"))
 
         await self._svc.create_span(
+            tenant_id,
             span_id=record["span_id"],
             trace_id=record["trace_id"],
             name=record["name"],
@@ -94,12 +100,23 @@ class SpanProcessor:
         if prompt_tokens or completion_tokens:
             model_name = attrs.get("llm.model", "unknown")
             await self._svc.record_token_usage(
+                tenant_id,
                 trace_id=record["trace_id"],
                 model_name=model_name,
                 prompt_tokens=int(prompt_tokens),
                 completion_tokens=int(completion_tokens),
                 span_id=record["span_id"],
             )
+
+
+def _infer_service_name(spans: list[dict[str, Any]]) -> str:
+    for s in spans:
+        if s.get("service_name"):
+            return str(s["service_name"])
+        attrs = s.get("attributes") or {}
+        if attrs.get("service.name"):
+            return str(attrs["service.name"])
+    return "otelmind"
 
 
 def _parse_dt(value: str | datetime) -> datetime:
