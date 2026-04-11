@@ -36,7 +36,9 @@ async def enforce_tenant_rate_limit(request: Request, tenant: Tenant, bucket: Bu
         results = await pipe.execute()
         count = results[2]
         if count > limit:
-            logger.warning("Rate limit exceeded tenant={} bucket={} count={}", tenant.slug, bucket, count)
+            logger.warning(
+                "Rate limit exceeded tenant={} bucket={} count={}", tenant.slug, bucket, count
+            )
             raise HTTPException(
                 status_code=429,
                 detail="Rate limit exceeded. Slow down.",

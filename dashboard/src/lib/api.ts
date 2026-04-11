@@ -135,6 +135,27 @@ export interface AlertRulesResponse {
   items: AlertRule[];
 }
 
+export interface EvalRun {
+  id: string;
+  name: string;
+  baseline: string | null;
+  candidate: string | null;
+  dataset: string | null;
+  status: string;
+  scores: Record<string, number> | null;
+  passed: boolean | null;
+  regression_count: number;
+  improvement_count: number;
+  case_count: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface EvalRunsResponse {
+  items: EvalRun[];
+  total: number;
+}
+
 // ── Traces ───────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -223,6 +244,32 @@ export const api = {
 
     delete(id: string): Promise<void> {
       return request<void>(`/alerts/${id}`, { method: "DELETE" });
+    },
+  },
+
+  evals: {
+    list(params?: { limit?: number; offset?: number }): Promise<EvalRunsResponse> {
+      const q = new URLSearchParams();
+      if (params?.limit) q.set("limit", String(params.limit));
+      if (params?.offset) q.set("offset", String(params.offset));
+      const qs = q.toString();
+      return request<EvalRunsResponse>(`/evals${qs ? `?${qs}` : ""}`);
+    },
+
+    get(id: string): Promise<EvalRun> {
+      return request<EvalRun>(`/evals/${id}`);
+    },
+
+    create(body: {
+      name: string;
+      baseline?: string;
+      candidate?: string;
+      dataset?: string;
+    }): Promise<EvalRun> {
+      return request<EvalRun>("/evals", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
     },
   },
 };

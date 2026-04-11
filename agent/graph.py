@@ -9,14 +9,14 @@ reviews it for quality, and optionally loops back for revision (max 2 times).
 
 from __future__ import annotations
 
-from typing import Annotated, Any, TypedDict
+from typing import Any, TypedDict
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
-
 # ── State ───────────────────────────────────────────────────────────────
+
 
 class AgentState(TypedDict):
     query: str
@@ -34,22 +34,26 @@ class AgentState(TypedDict):
 
 # ── LLM ─────────────────────────────────────────────────────────────────
 
+
 def get_llm() -> ChatOpenAI:
     return ChatOpenAI(model="gpt-4o", temperature=0.3)
 
 
 # ── Node Functions ──────────────────────────────────────────────────────
 
+
 def research(state: AgentState) -> dict[str, Any]:
     """Research node — gathers information about the query using GPT-4o."""
     llm = get_llm()
 
     messages = [
-        SystemMessage(content=(
-            "You are a research assistant. Given a query, provide a comprehensive "
-            "research summary with key facts, data points, and recent developments. "
-            "Be thorough but concise. Include specific numbers and sources where possible."
-        )),
+        SystemMessage(
+            content=(
+                "You are a research assistant. Given a query, provide a comprehensive "
+                "research summary with key facts, data points, and recent developments. "
+                "Be thorough but concise. Include specific numbers and sources where possible."
+            )
+        ),
         HumanMessage(content=f"Research the following topic:\n\n{state['query']}"),
     ]
 
@@ -59,7 +63,8 @@ def research(state: AgentState) -> dict[str, Any]:
     return {
         "research_output": response.content,
         "total_prompt_tokens": state.get("total_prompt_tokens", 0) + usage.get("input_tokens", 0),
-        "total_completion_tokens": state.get("total_completion_tokens", 0) + usage.get("output_tokens", 0),
+        "total_completion_tokens": state.get("total_completion_tokens", 0)
+        + usage.get("output_tokens", 0),
         "model_name": "gpt-4o",
     }
 
@@ -77,16 +82,20 @@ def draft(state: AgentState) -> dict[str, Any]:
         )
 
     messages = [
-        SystemMessage(content=(
-            "You are a skilled writer. Using the research provided, write a clear, "
-            "well-structured response to the user's query. Include an introduction, "
-            "key points with supporting evidence, and a brief conclusion."
-        )),
-        HumanMessage(content=(
-            f"Query: {state['query']}\n\n"
-            f"Research:\n{state['research_output']}"
-            f"{revision_note}"
-        )),
+        SystemMessage(
+            content=(
+                "You are a skilled writer. Using the research provided, write a clear, "
+                "well-structured response to the user's query. Include an introduction, "
+                "key points with supporting evidence, and a brief conclusion."
+            )
+        ),
+        HumanMessage(
+            content=(
+                f"Query: {state['query']}\n\n"
+                f"Research:\n{state['research_output']}"
+                f"{revision_note}"
+            )
+        ),
     ]
 
     response = llm.invoke(messages)
@@ -95,7 +104,8 @@ def draft(state: AgentState) -> dict[str, Any]:
     return {
         "draft_output": response.content,
         "total_prompt_tokens": state.get("total_prompt_tokens", 0) + usage.get("input_tokens", 0),
-        "total_completion_tokens": state.get("total_completion_tokens", 0) + usage.get("output_tokens", 0),
+        "total_completion_tokens": state.get("total_completion_tokens", 0)
+        + usage.get("output_tokens", 0),
     }
 
 
@@ -104,21 +114,25 @@ def review(state: AgentState) -> dict[str, Any]:
     llm = get_llm()
 
     messages = [
-        SystemMessage(content=(
-            "You are a quality reviewer. Evaluate the draft response for:\n"
-            "1. Accuracy — does it match the research?\n"
-            "2. Completeness — are key points covered?\n"
-            "3. Clarity — is it well-written and easy to understand?\n"
-            "4. Structure — does it have intro, body, conclusion?\n\n"
-            "Respond with EXACTLY this format:\n"
-            "VERDICT: PASS or FAIL\n"
-            "FEEDBACK: your specific feedback here"
-        )),
-        HumanMessage(content=(
-            f"Query: {state['query']}\n\n"
-            f"Research:\n{state['research_output']}\n\n"
-            f"Draft Response:\n{state['draft_output']}"
-        )),
+        SystemMessage(
+            content=(
+                "You are a quality reviewer. Evaluate the draft response for:\n"
+                "1. Accuracy — does it match the research?\n"
+                "2. Completeness — are key points covered?\n"
+                "3. Clarity — is it well-written and easy to understand?\n"
+                "4. Structure — does it have intro, body, conclusion?\n\n"
+                "Respond with EXACTLY this format:\n"
+                "VERDICT: PASS or FAIL\n"
+                "FEEDBACK: your specific feedback here"
+            )
+        ),
+        HumanMessage(
+            content=(
+                f"Query: {state['query']}\n\n"
+                f"Research:\n{state['research_output']}\n\n"
+                f"Draft Response:\n{state['draft_output']}"
+            )
+        ),
     ]
 
     response = llm.invoke(messages)
@@ -133,7 +147,8 @@ def review(state: AgentState) -> dict[str, Any]:
         "review_feedback": feedback,
         "revision_count": state.get("revision_count", 0) + 1,
         "total_prompt_tokens": state.get("total_prompt_tokens", 0) + usage.get("input_tokens", 0),
-        "total_completion_tokens": state.get("total_completion_tokens", 0) + usage.get("output_tokens", 0),
+        "total_completion_tokens": state.get("total_completion_tokens", 0)
+        + usage.get("output_tokens", 0),
     }
 
 
@@ -146,6 +161,7 @@ def finalize(state: AgentState) -> dict[str, Any]:
 
 # ── Routing ─────────────────────────────────────────────────────────────
 
+
 def should_revise(state: AgentState) -> str:
     """Conditional edge: loop back to draft if review failed and under revision limit."""
     if not state.get("review_passed", False) and state.get("revision_count", 0) < 2:
@@ -154,6 +170,7 @@ def should_revise(state: AgentState) -> str:
 
 
 # ── Graph Builder ───────────────────────────────────────────────────────
+
 
 def build_graph() -> StateGraph:
     """Build the research agent graph (uncompiled)."""

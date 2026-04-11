@@ -37,7 +37,9 @@ class SpanProcessor:
                 await self._persist_span(tenant_id, span_rec)
                 persisted += 1
 
-        logger.info("Processed {} spans across {} traces tenant={}", persisted, len(traces), tenant_id)
+        logger.info(
+            "Processed {} spans across {} traces tenant={}", persisted, len(traces), tenant_id
+        )
         return persisted
 
     async def _ensure_trace(

@@ -29,8 +29,8 @@ else:
     print("ERROR: Set OPENAI_API_KEY or LLM_API_KEY in .env")
     sys.exit(1)
 
-from agent.graph import build_graph
-from agent.telemetry import OtelMindTelemetry
+from agent.graph import build_graph  # noqa: E402  (must follow sys.path setup)
+from agent.telemetry import OtelMindTelemetry  # noqa: E402
 
 # ── Sample queries ──────────────────────────────────────────────────────
 
@@ -79,18 +79,20 @@ def run_agent(query: str, telemetry: OtelMindTelemetry, run_number: int) -> None
     start = time.monotonic()
 
     try:
-        result = app.invoke({
-            "query": query,
-            "research_output": "",
-            "draft_output": "",
-            "review_feedback": "",
-            "review_passed": False,
-            "revision_count": 0,
-            "final_output": "",
-            "total_prompt_tokens": 0,
-            "total_completion_tokens": 0,
-            "model_name": "gpt-4o",
-        })
+        result = app.invoke(
+            {
+                "query": query,
+                "research_output": "",
+                "draft_output": "",
+                "review_feedback": "",
+                "review_passed": False,
+                "revision_count": 0,
+                "final_output": "",
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "model_name": "gpt-4o",
+            }
+        )
 
         elapsed = time.monotonic() - start
 
@@ -98,7 +100,7 @@ def run_agent(query: str, telemetry: OtelMindTelemetry, run_number: int) -> None
         final = result.get("final_output", "")
         print(final[:500] + ("..." if len(final) > 500 else ""))
 
-        print(f"\n--- Token Usage ---")
+        print("\n--- Token Usage ---")
         print(f"  Prompt tokens:     {result.get('total_prompt_tokens', 0)}")
         print(f"  Completion tokens: {result.get('total_completion_tokens', 0)}")
         print(f"  Revisions:         {result.get('revision_count', 0)}")
@@ -109,7 +111,7 @@ def run_agent(query: str, telemetry: OtelMindTelemetry, run_number: int) -> None
         print(f"\n✗ Agent failed after {elapsed:.1f}s: {exc}")
 
     # Flush spans to OtelMind
-    print(f"\nSending telemetry to OtelMind...")
+    print("\nSending telemetry to OtelMind...")
     telemetry.flush()
 
 
@@ -117,7 +119,7 @@ def main() -> None:
     print("=" * 70)
     print("OtelMind Research Agent — Live Telemetry Demo")
     print("=" * 70)
-    print(f"Target: https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app")
+    print("Target: https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app")
     print(f"Queries: {len(QUERIES)}")
 
     telemetry = OtelMindTelemetry(service_name="research-agent")
@@ -138,16 +140,17 @@ def main() -> None:
             timeout=10.0,
         )
         import json
+
         stats = resp.json()
-        print(f"\nDashboard Stats:")
+        print("\nDashboard Stats:")
         print(json.dumps(stats, indent=2))
     except Exception as exc:
         print(f"Could not fetch dashboard: {exc}")
 
-    print(f"\nView full dashboard at:")
-    print(f"  https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/dashboard/stats")
-    print(f"  https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/traces")
-    print(f"  https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/docs")
+    print("\nView full dashboard at:")
+    print("  https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/dashboard/stats")
+    print("  https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/traces")
+    print("  https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/docs")
 
 
 if __name__ == "__main__":

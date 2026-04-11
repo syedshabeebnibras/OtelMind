@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "otelmind-mcp"
+version = "0.1.0"
+description = "MCP server wrapping OtelMind AI agent failure detection and evaluation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["mcp", "opentelemetry", "langgraph", "ai", "observability", "evaluation"]
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "openai>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+otelmind-mcp = "server:main"
+
+[tool.hatch.build.targets.wheel]
+sources = ["."]
+include = [
+    "server.py",
+    "tools/__init__.py",
+    "tools/classifier.py",
+    "tools/hallucination.py",
+    "tools/eval_runner.py",
+    "tools/trace_summary.py",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "server.py",
+    "tools/",
+    "README.md",
+    "pyproject.toml",
+    ".gitignore",
+]

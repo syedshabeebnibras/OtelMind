@@ -15,12 +15,17 @@ from sqlalchemy.orm import selectinload
 from otelmind.api.auth import CurrentTenant, require_scope
 from otelmind.api.rate_limit import enforce_tenant_rate_limit
 from otelmind.api.schemas import (
-    AlertRulesResponsePublic,
+    AlertRuleCreateRequest,
     AlertRulePublic,
-    CostBreakdownResponsePublic,
+    AlertRulesResponsePublic,
+    AlertRuleUpdateRequest,
     CostBreakdownItemPublic,
+    CostBreakdownResponsePublic,
     DashboardStatsPublic,
     DashboardStatsResponse,
+    EvalRunCreateRequest,
+    EvalRunPublic,
+    EvalRunsListResponse,
     FailureBreakdown,
     FailureListItem,
     FailuresListResponse,
@@ -31,14 +36,15 @@ from otelmind.api.schemas import (
     SpanIngestRequest,
     SpanResponse,
     TraceListItem,
-    TraceResponse,
     TracesListResponse,
 )
 from otelmind.collector.collector import collector
 from otelmind.cost.service import CostService
 from otelmind.db import get_session
 from otelmind.storage.models import (
+    AlertChannel,
     AlertRule,
+    EvalRun,
     FailureClassification,
     RemediationAction,
     TokenCount,
@@ -182,11 +188,17 @@ async def list_traces(
     items = [_trace_to_list_item(t) for t in traces]
     next_cursor = str(offset + limit) if offset + limit < total else None
     prev_cursor = str(max(0, offset - limit)) if offset > 0 else None
-    return TracesListResponse(items=items, total=total, next_cursor=next_cursor, prev_cursor=prev_cursor)
+    return TracesListResponse(
+        items=items, total=total, next_cursor=next_cursor, prev_cursor=prev_cursor
+    )
 
 
 @router.get("/traces/{trace_id}")
-async def get_trace(trace_id: str, tenant: CurrentTenant, _: Annotated[None, Depends(require_scope("read", "admin"))]):
+async def get_trace(
+    trace_id: str,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("read", "admin"))],
+):
     async with get_session() as session:
         stmt = (
             select(Trace)
@@ -265,7 +277,9 @@ async def list_failures(
         stmt = select(FailureClassification).where(FailureClassification.tenant_id == tenant.id)
         if failure_type:
             stmt = stmt.where(FailureClassification.failure_type == failure_type)
-        count_stmt = select(func.count(FailureClassification.id)).where(FailureClassification.tenant_id == tenant.id)
+        count_stmt = select(func.count(FailureClassification.id)).where(
+            FailureClassification.tenant_id == tenant.id
+        )
         if failure_type:
             count_stmt = count_stmt.where(FailureClassification.failure_type == failure_type)
         total = int(await session.scalar(count_stmt) or 0)
@@ -302,7 +316,9 @@ async def stream_failures(
         last_ts: datetime | None = None
         while True:
             async with get_session() as session:
-                q = select(FailureClassification).where(FailureClassification.tenant_id == tenant.id)
+                q = select(FailureClassification).where(
+                    FailureClassification.tenant_id == tenant.id
+                )
                 if last_ts is not None:
                     q = q.where(FailureClassification.created_at > last_ts)
                 q = q.order_by(FailureClassification.created_at.asc()).limit(20)
@@ -392,7 +408,7 @@ async def cost_breakdown(
                 )
             )
 
-    daily = [
+    daily: list[dict[str, float | str]] = [
         {"date": str(it["date"]), "cost": float(it.get("cost_usd", 0))}
         for it in day_raw.get("items", [])
     ]
@@ -470,7 +486,9 @@ async def dashboard_stats(
         )
 
         svc_count = await session.scalar(
-            select(func.count(func.distinct(Trace.service_name))).where(Trace.tenant_id == tenant.id)
+            select(func.count(func.distinct(Trace.service_name))).where(
+                Trace.tenant_id == tenant.id
+            )
         )
 
         return DashboardStatsPublic(
@@ -478,7 +496,7 @@ async def dashboard_stats(
             total_failures=total_failures,
             failure_rate=failure_rate,
             avg_duration_ms=float(metrics["avg_trace_duration_ms"]),
-            total_cost_usd=round(float(cost_sum), 4),
+            total_cost_usd=round(float(cost_sum or 0.0), 4),
             active_services=int(svc_count or 0),
             failures_by_type=failures_by_type,
             traces_by_status=traces_by_status,
@@ -507,13 +525,17 @@ async def dashboard_stats_legacy(
             .group_by(FailureClassification.failure_type)
         )
         fc_result = await session.execute(fc_stmt)
-        failures_by_type = [FailureBreakdown(failure_type=row[0], count=row[1]) for row in fc_result.all()]
+        failures_by_type = [
+            FailureBreakdown(failure_type=row[0], count=row[1]) for row in fc_result.all()
+        ]
 
         ra_stmt = (
             select(
                 RemediationAction.action_type,
                 func.count(RemediationAction.id).label("total"),
-                func.sum(case((RemediationAction.status == "success", 1), else_=0)).label("successful"),
+                func.sum(case((RemediationAction.status == "success", 1), else_=0)).label(
+                    "successful"
+                ),
             )
             .where(RemediationAction.tenant_id == tenant.id)
             .group_by(RemediationAction.action_type)
@@ -548,6 +570,36 @@ async def dashboard_stats_legacy(
 # ── Alerts (read rules for dashboard) ───────────────────────────────────
 
 
+async def _resolve_channel(session, tenant_id, channel_type: str) -> AlertChannel:
+    """Return the first active channel of `channel_type` for the tenant, creating
+    a placeholder row if none exists. Operators later edit the config payload
+    (webhook URL, routing key, etc.) via the channel-management endpoints.
+    """
+    import uuid as _uuid
+
+    existing = await session.scalar(
+        select(AlertChannel).where(
+            AlertChannel.tenant_id == tenant_id,
+            AlertChannel.channel_type == channel_type,
+            AlertChannel.is_active.is_(True),
+        )
+    )
+    if existing is not None:
+        return existing
+
+    placeholder = AlertChannel(
+        id=_uuid.uuid4(),
+        tenant_id=tenant_id,
+        name=f"{channel_type} (default)",
+        channel_type=channel_type,
+        config={},
+        is_active=True,
+    )
+    session.add(placeholder)
+    await session.flush()
+    return placeholder
+
+
 @router.get("/alerts", response_model=AlertRulesResponsePublic)
 async def list_alert_rules(
     request: Request,
@@ -556,18 +608,223 @@ async def list_alert_rules(
 ) -> AlertRulesResponsePublic:
     await enforce_tenant_rate_limit(request, tenant, "read")
     async with get_session() as session:
-        stmt = select(AlertRule).where(AlertRule.tenant_id == tenant.id)
+        stmt = (
+            select(AlertRule, AlertChannel)
+            .join(AlertChannel, AlertRule.channel_id == AlertChannel.id)
+            .where(AlertRule.tenant_id == tenant.id)
+            .order_by(AlertRule.created_at.desc())
+        )
         res = await session.execute(stmt)
-        rules = list(res.scalars().all())
+        rows = list(res.all())
     items = [
         AlertRulePublic(
-            id=str(r.id),
-            failure_type=r.failure_type,
-            threshold=float(r.min_confidence),
-            channels=[str(r.channel_id)],
-            enabled=r.is_active,
-            created_at=r.created_at,
+            id=str(r.AlertRule.id),
+            failure_type=r.AlertRule.failure_type,
+            threshold=float(r.AlertRule.min_confidence),
+            channels=[r.AlertChannel.channel_type],
+            enabled=r.AlertRule.is_active,
+            created_at=r.AlertRule.created_at,
         )
-        for r in rules
+        for r in rows
     ]
     return AlertRulesResponsePublic(items=items)
+
+
+@router.post("/alerts", response_model=AlertRulePublic, status_code=201)
+async def create_alert_rule(
+    body: AlertRuleCreateRequest,
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("write", "admin"))],
+) -> AlertRulePublic:
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    if not body.channels:
+        raise HTTPException(status_code=400, detail="At least one channel required")
+
+    import uuid as _uuid
+
+    async with get_session() as session:
+        channel = await _resolve_channel(session, tenant.id, body.channels[0])
+        rule = AlertRule(
+            id=_uuid.uuid4(),
+            tenant_id=tenant.id,
+            channel_id=channel.id,
+            failure_type=body.failure_type,
+            min_confidence=body.threshold,
+            is_active=body.enabled,
+        )
+        session.add(rule)
+        await session.flush()
+        created_at = rule.created_at or datetime.now(UTC)
+
+    return AlertRulePublic(
+        id=str(rule.id),
+        failure_type=rule.failure_type,
+        threshold=float(rule.min_confidence),
+        channels=[channel.channel_type],
+        enabled=rule.is_active,
+        created_at=created_at,
+    )
+
+
+@router.patch("/alerts/{rule_id}", response_model=AlertRulePublic)
+async def update_alert_rule(
+    rule_id: str,
+    body: AlertRuleUpdateRequest,
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("write", "admin"))],
+) -> AlertRulePublic:
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    import uuid as _uuid
+
+    async with get_session() as session:
+        rule = await session.scalar(
+            select(AlertRule).where(
+                AlertRule.tenant_id == tenant.id,
+                AlertRule.id == _uuid.UUID(rule_id),
+            )
+        )
+        if rule is None:
+            raise HTTPException(status_code=404, detail="Alert rule not found")
+
+        if body.enabled is not None:
+            rule.is_active = body.enabled
+        if body.threshold is not None:
+            rule.min_confidence = body.threshold
+        if body.channels:
+            channel = await _resolve_channel(session, tenant.id, body.channels[0])
+            rule.channel_id = channel.id
+        await session.flush()
+
+        current_channel = await session.scalar(
+            select(AlertChannel).where(AlertChannel.id == rule.channel_id)
+        )
+
+    return AlertRulePublic(
+        id=str(rule.id),
+        failure_type=rule.failure_type,
+        threshold=float(rule.min_confidence),
+        channels=[current_channel.channel_type] if current_channel else [],
+        enabled=rule.is_active,
+        created_at=rule.created_at,
+    )
+
+
+@router.delete("/alerts/{rule_id}", status_code=204)
+async def delete_alert_rule(
+    rule_id: str,
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("write", "admin"))],
+) -> None:
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    import uuid as _uuid
+
+    async with get_session() as session:
+        rule = await session.scalar(
+            select(AlertRule).where(
+                AlertRule.tenant_id == tenant.id,
+                AlertRule.id == _uuid.UUID(rule_id),
+            )
+        )
+        if rule is None:
+            raise HTTPException(status_code=404, detail="Alert rule not found")
+        await session.delete(rule)
+
+
+# ── Eval runs ───────────────────────────────────────────────────────────
+
+
+def _eval_run_to_public(r: EvalRun) -> EvalRunPublic:
+    return EvalRunPublic(
+        id=str(r.id),
+        name=r.name,
+        baseline=r.baseline,
+        candidate=r.candidate,
+        dataset=r.dataset,
+        status=r.status,
+        scores=r.scores,
+        passed=r.passed,
+        regression_count=r.regression_count,
+        improvement_count=r.improvement_count,
+        case_count=r.case_count,
+        created_at=r.created_at,
+        completed_at=r.completed_at,
+    )
+
+
+@router.get("/evals", response_model=EvalRunsListResponse)
+async def list_eval_runs(
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("read", "admin"))],
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> EvalRunsListResponse:
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    async with get_session() as session:
+        total = int(
+            await session.scalar(
+                select(func.count(EvalRun.id)).where(EvalRun.tenant_id == tenant.id)
+            )
+            or 0
+        )
+        stmt = (
+            select(EvalRun)
+            .where(EvalRun.tenant_id == tenant.id)
+            .order_by(EvalRun.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = list((await session.execute(stmt)).scalars().all())
+    return EvalRunsListResponse(
+        items=[_eval_run_to_public(r) for r in rows], total=total
+    )
+
+
+@router.get("/evals/{run_id}", response_model=EvalRunPublic)
+async def get_eval_run(
+    run_id: str,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("read", "admin"))],
+) -> EvalRunPublic:
+    import uuid as _uuid
+
+    async with get_session() as session:
+        row = await session.scalar(
+            select(EvalRun).where(
+                EvalRun.tenant_id == tenant.id,
+                EvalRun.id == _uuid.UUID(run_id),
+            )
+        )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Eval run not found")
+    return _eval_run_to_public(row)
+
+
+@router.post("/evals", response_model=EvalRunPublic, status_code=201)
+async def create_eval_run(
+    body: EvalRunCreateRequest,
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("write", "admin"))],
+) -> EvalRunPublic:
+    """Register an eval run row. Mostly used by CI integrations that
+    compute scores externally and then post the summary here."""
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    import uuid as _uuid
+
+    async with get_session() as session:
+        run = EvalRun(
+            id=_uuid.uuid4(),
+            tenant_id=tenant.id,
+            name=body.name,
+            baseline=body.baseline,
+            candidate=body.candidate,
+            dataset=body.dataset,
+            status="pending",
+        )
+        session.add(run)
+        await session.flush()
+    return _eval_run_to_public(run)

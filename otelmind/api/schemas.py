@@ -216,3 +216,44 @@ class AlertRulePublic(BaseModel):
 
 class AlertRulesResponsePublic(BaseModel):
     items: list[AlertRulePublic]
+
+
+class AlertRuleCreateRequest(BaseModel):
+    failure_type: str
+    threshold: float = 0.7
+    channels: list[str]  # channel type names (slack, pagerduty, email, webhook)
+    enabled: bool = True
+
+
+class AlertRuleUpdateRequest(BaseModel):
+    enabled: bool | None = None
+    threshold: float | None = None
+    channels: list[str] | None = None
+
+
+class EvalRunPublic(BaseModel):
+    id: str
+    name: str
+    baseline: str | None = None
+    candidate: str | None = None
+    dataset: str | None = None
+    status: str
+    scores: dict[str, float] | None = None
+    passed: bool | None = None
+    regression_count: int = 0
+    improvement_count: int = 0
+    case_count: int = 0
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+class EvalRunsListResponse(BaseModel):
+    items: list[EvalRunPublic]
+    total: int
+
+
+class EvalRunCreateRequest(BaseModel):
+    name: str
+    baseline: str | None = None
+    candidate: str | None = None
+    dataset: str | None = None

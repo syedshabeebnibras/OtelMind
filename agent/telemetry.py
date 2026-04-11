@@ -11,14 +11,13 @@ import functools
 import json
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
-OTELMIND_INGEST_URL = (
-    "https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/ingest"
-)
+OTELMIND_INGEST_URL = "https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/ingest"
 
 
 class OtelMindTelemetry:
@@ -49,7 +48,7 @@ class OtelMindTelemetry:
             telemetry._step_counter += 1
 
             start = time.monotonic()
-            start_dt = datetime.now(timezone.utc)
+            start_dt = datetime.now(UTC)
 
             # Capture input preview
             input_preview = _safe_serialize(state, 500)
@@ -58,7 +57,7 @@ class OtelMindTelemetry:
                 result = fn(state)
 
                 end = time.monotonic()
-                end_dt = datetime.now(timezone.utc)
+                end_dt = datetime.now(UTC)
                 duration_ms = round((end - start) * 1000, 2)
 
                 output_preview = _safe_serialize(result, 500)
@@ -101,7 +100,7 @@ class OtelMindTelemetry:
 
             except Exception as exc:
                 end = time.monotonic()
-                end_dt = datetime.now(timezone.utc)
+                end_dt = datetime.now(UTC)
                 duration_ms = round((end - start) * 1000, 2)
 
                 span = {
