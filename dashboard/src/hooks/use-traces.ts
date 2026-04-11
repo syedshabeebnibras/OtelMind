@@ -48,7 +48,7 @@ export function useTraces(params: UseTracesParams = {}) {
 // ── Single trace detail ───────────────────────────────────────────────────────
 
 export function useTrace(traceId: string | null) {
-  const { data, error, isLoading } = useSWR<TraceDetail>(
+  const { data, error, isLoading, mutate } = useSWR<TraceDetail>(
     traceId ? ["trace", traceId] : null,
     () => api.traces.get(traceId!),
     {
@@ -61,6 +61,7 @@ export function useTrace(traceId: string | null) {
     isLoading,
     isError: !!error,
     error,
+    mutate,
   };
 }
 
@@ -149,6 +150,24 @@ export function useAlertRules() {
 
   return {
     rules: data?.items ?? [],
+    isLoading,
+    isError: !!error,
+    error,
+    mutate,
+  };
+}
+
+// ── Alert channels ────────────────────────────────────────────────────────────
+
+export function useAlertChannels() {
+  const { data, error, isLoading, mutate } = useSWR(
+    "alert-channels",
+    () => api.alerts.channels.list(),
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    channels: data?.items ?? [],
     isLoading,
     isError: !!error,
     error,

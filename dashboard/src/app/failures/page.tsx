@@ -375,30 +375,42 @@ export default function FailuresPage() {
                         </TableCell>
                       </TableRow>
                     )
-                  : failures.map((f) => (
-                      <TableRow key={f.id}>
-                        <TableCell>
-                          <Link
-                            href={`/traces/${f.trace_id}`}
-                            className="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
-                          >
-                            {truncate(f.trace_id, 32)}
-                          </Link>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="destructive">{f.failure_type}</Badge>
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-400 capitalize">
-                          {f.detection_method}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs text-slate-300">
-                          {(f.confidence * 100).toFixed(0)}%
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-400">
-                          {formatRelativeTime(f.timestamp)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                  : failures.map((f) => {
+                      // eval_regression failures use a synthetic trace_id
+                      // of the form `eval-<run_uuid>` — there's no matching
+                      // row in traces, so link to the eval run view instead.
+                      const isEvalFailure = f.trace_id.startsWith("eval-");
+                      const linkHref = isEvalFailure
+                        ? `/evals?run=${f.trace_id.slice(5)}`
+                        : `/traces/${f.trace_id}`;
+                      const linkLabel = isEvalFailure
+                        ? `eval · ${truncate(f.trace_id.slice(5), 28)}`
+                        : truncate(f.trace_id, 32);
+                      return (
+                        <TableRow key={f.id}>
+                          <TableCell>
+                            <Link
+                              href={linkHref}
+                              className="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                            >
+                              {linkLabel}
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="destructive">{f.failure_type}</Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-400 capitalize">
+                            {f.detection_method}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-slate-300">
+                            {(f.confidence * 100).toFixed(0)}%
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-400">
+                            {formatRelativeTime(f.timestamp)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
             </TableBody>
           </Table>
         )}
