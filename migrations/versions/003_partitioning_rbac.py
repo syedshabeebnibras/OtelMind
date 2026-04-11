@@ -297,7 +297,7 @@ def upgrade() -> None:
     # legacy table itself still has its primary key and will be dropped
     # later in the backfill step, so full-table scans during backfill
     # are fine.
-    _LEGACY_INDEXES_TO_DROP = [
+    legacy_indexes_to_drop = [
         # from migration 001
         "ix_traces_service_name",
         "ix_traces_start_time",
@@ -321,7 +321,7 @@ def upgrade() -> None:
         "ix_audit_logs_tenant_id",
         "ix_audit_logs_created_at",
     ]
-    for idx in _LEGACY_INDEXES_TO_DROP:
+    for idx in legacy_indexes_to_drop:
         op.execute(f"DROP INDEX IF EXISTS {idx}")
 
     # Drop the unique constraint on traces.trace_id from migration 001 —

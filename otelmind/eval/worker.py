@@ -79,9 +79,9 @@ async def _claim_pending_eval_run() -> EvalRun | None:
         return run
 
 
-def _extract_cases_from_details(details: dict[str, Any] | None) -> tuple[
-    list[EvalCase], list[EvalCase]
-]:
+def _extract_cases_from_details(
+    details: dict[str, Any] | None,
+) -> tuple[list[EvalCase], list[EvalCase]]:
     """Pull baseline/candidate case lists out of the EvalRun.details JSON blob.
 
     The POST /evals endpoint accepts cases under these keys. We tolerate
@@ -126,9 +126,7 @@ async def _execute_eval_run(run_id: _uuid.UUID) -> None:
             run.scores = {}
             run.case_count = 0
             run.completed_at = datetime.now(UTC)
-            logger.info(
-                "eval: run {} has no cases, marking empty-complete", run.id
-            )
+            logger.info("eval: run {} has no cases, marking empty-complete", run.id)
             return
 
     try:
@@ -211,9 +209,7 @@ async def eval_run_worker_loop() -> None:
 # ─── 2. Trace auto-scoring ────────────────────────────────────────────
 
 
-async def _pick_unscored_traces(
-    tenant: Tenant, limit: int
-) -> list[Trace]:
+async def _pick_unscored_traces(tenant: Tenant, limit: int) -> list[Trace]:
     """Return recently-completed traces that have no rows in trace_scores yet.
 
     Filters to the last hour to cap the work even at high volume — if
@@ -223,9 +219,7 @@ async def _pick_unscored_traces(
     """
     cutoff = datetime.now(UTC) - timedelta(hours=1)
     async with get_session() as session:
-        scored_subq = select(TraceScore.trace_id).where(
-            TraceScore.tenant_id == tenant.id
-        )
+        scored_subq = select(TraceScore.trace_id).where(TraceScore.tenant_id == tenant.id)
         stmt = (
             select(Trace)
             .where(
@@ -301,9 +295,7 @@ async def _score_trace(trace: Trace, judge: LLMJudge) -> JudgeResult | None:
         return None
 
 
-async def _persist_trace_scores(
-    tenant_id: _uuid.UUID, trace_id: str, result: JudgeResult
-) -> None:
+async def _persist_trace_scores(tenant_id: _uuid.UUID, trace_id: str, result: JudgeResult) -> None:
     async with get_session() as session:
         for dim, score in result.scores.items():
             session.add(
@@ -321,17 +313,13 @@ async def _persist_trace_scores(
 
 
 async def _autoscore_tenant(tenant: Tenant, judge: LLMJudge) -> int:
-    batch = await _pick_unscored_traces(
-        tenant, limit=settings.eval_autoscorer_batch_size
-    )
+    batch = await _pick_unscored_traces(tenant, limit=settings.eval_autoscorer_batch_size)
     if not batch:
         return 0
 
     # Apply sample rate. 0.1 means roughly every 10th trace gets scored.
     rate = max(0.0, min(1.0, settings.eval_autoscorer_sample_rate))
-    sampled = [t for t in batch if random.random() < rate][
-        : settings.eval_autoscorer_batch_size
-    ]
+    sampled = [t for t in batch if random.random() < rate][: settings.eval_autoscorer_batch_size]
     if not sampled:
         return 0
 
@@ -361,11 +349,7 @@ async def trace_autoscorer_loop() -> None:
         try:
             async with get_session() as session:
                 tenants = list(
-                    (
-                        await session.execute(
-                            select(Tenant).where(Tenant.is_active.is_(True))
-                        )
-                    )
+                    (await session.execute(select(Tenant).where(Tenant.is_active.is_(True))))
                     .scalars()
                     .all()
                 )
@@ -501,9 +485,7 @@ async def _run_daily_golden_for_tenant(tenant: Tenant) -> None:
     # twice in the same day), reuse it.
     async with get_session() as session:
         existing = await session.scalar(
-            select(EvalRun).where(
-                EvalRun.tenant_id == tenant.id, EvalRun.name == run_name
-            )
+            select(EvalRun).where(EvalRun.tenant_id == tenant.id, EvalRun.name == run_name)
         )
         if existing is not None:
             return
@@ -579,17 +561,12 @@ async def daily_golden_regression_loop() -> None:
         try:
             now = datetime.now(UTC)
             should_fire = (
-                now.hour >= settings.eval_daily_run_utc_hour
-                and last_run_date != now.date()
+                now.hour >= settings.eval_daily_run_utc_hour and last_run_date != now.date()
             )
             if should_fire:
                 async with get_session() as session:
                     tenants = list(
-                        (
-                            await session.execute(
-                                select(Tenant).where(Tenant.is_active.is_(True))
-                            )
-                        )
+                        (await session.execute(select(Tenant).where(Tenant.is_active.is_(True))))
                         .scalars()
                         .all()
                     )

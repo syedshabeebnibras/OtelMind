@@ -141,9 +141,7 @@ class Role(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    permissions: Mapped[list[str]] = mapped_column(
-        ARRAY(String), nullable=False, default=list
-    )
+    permissions: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
     # System roles are seeded by migrations and cannot be edited by tenants.
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -440,9 +438,7 @@ class EvalRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    __table_args__ = (
-        Index("ix_eval_runs_tenant_created", "tenant_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_eval_runs_tenant_created", "tenant_id", "created_at"),)
 
 
 class RemediationAction(Base):

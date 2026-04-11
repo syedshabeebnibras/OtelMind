@@ -94,9 +94,7 @@ async def drop_expired_partitions(min_retention_days: int | None = None) -> dict
     async with get_session() as session:
         if min_retention_days is None:
             max_retention = await session.scalar(
-                select(Tenant.retention_days)
-                .order_by(Tenant.retention_days.desc())
-                .limit(1)
+                select(Tenant.retention_days).order_by(Tenant.retention_days.desc()).limit(1)
             )
             retention = int(max_retention or 30)
         else:

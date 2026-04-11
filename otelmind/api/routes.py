@@ -781,9 +781,7 @@ async def list_eval_runs(
             .offset(offset)
         )
         rows = list((await session.execute(stmt)).scalars().all())
-    return EvalRunsListResponse(
-        items=[_eval_run_to_public(r) for r in rows], total=total
-    )
+    return EvalRunsListResponse(items=[_eval_run_to_public(r) for r in rows], total=total)
 
 
 @router.get("/evals/{run_id}", response_model=EvalRunPublic)

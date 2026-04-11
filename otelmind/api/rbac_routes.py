@@ -261,10 +261,14 @@ async def list_audit_log(
         total = len((await session.execute(total_stmt)).scalars().all())
 
         rows = (
-            await session.execute(
-                base.order_by(desc(AuditLog.created_at)).limit(limit).offset(offset)
+            (
+                await session.execute(
+                    base.order_by(desc(AuditLog.created_at)).limit(limit).offset(offset)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     return AuditLogResponse(
         items=[AuditLogEntry.model_validate(r) for r in rows],
