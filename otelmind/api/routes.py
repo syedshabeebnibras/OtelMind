@@ -32,6 +32,8 @@ from otelmind.api.schemas import (
     HealthResponse,
     IngestResponse,
     MetricsResponse,
+    QualityDimension,
+    QualityKpiResponse,
     RemediationBreakdown,
     SpanIngestRequest,
     SpanResponse,
@@ -49,6 +51,7 @@ from otelmind.storage.models import (
     RemediationAction,
     TokenCount,
     Trace,
+    TraceScore,
 )
 from otelmind.storage.telemetry_service import TelemetryService
 
@@ -810,10 +813,23 @@ async def create_eval_run(
     tenant: CurrentTenant,
     _: Annotated[None, Depends(require_scope("write", "admin"))],
 ) -> EvalRunPublic:
-    """Register an eval run row. Mostly used by CI integrations that
-    compute scores externally and then post the summary here."""
+    """Create an eval run.
+
+    If `baseline_cases` and `candidate_cases` are supplied, the
+    background worker in `otelmind/eval/worker.py` will pick this row
+    up within ~15s, run `run_regression()`, and write dimensional
+    scores back to the same row. If cases are omitted, the run is a
+    receipt — external CI can POST scores later.
+    """
     await enforce_tenant_rate_limit(request, tenant, "read")
     import uuid as _uuid
+
+    details: dict[str, Any] | None = None
+    if body.baseline_cases or body.candidate_cases:
+        details = {
+            "baseline_cases": [c.model_dump() for c in (body.baseline_cases or [])],
+            "candidate_cases": [c.model_dump() for c in (body.candidate_cases or [])],
+        }
 
     async with get_session() as session:
         run = EvalRun(
@@ -824,7 +840,83 @@ async def create_eval_run(
             candidate=body.candidate,
             dataset=body.dataset,
             status="pending",
+            details=details,
         )
         session.add(run)
         await session.flush()
     return _eval_run_to_public(run)
+
+
+# ── Quality KPIs (continuous auto-scoring) ──────────────────────────────
+
+
+@router.get("/eval/quality", response_model=QualityKpiResponse)
+async def eval_quality_kpis(
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("read", "admin"))],
+    window_hours: int = Query(24, ge=1, le=720),
+) -> QualityKpiResponse:
+    """Rolling quality KPIs over sampled traces.
+
+    Backed by the `trace_scores` table, populated by the auto-scorer
+    loop. Returns per-dimension mean scores over the requested window,
+    plus a daily trend for charting.
+    """
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    cutoff = datetime.now(UTC) - timedelta(hours=window_hours)
+
+    async with get_session() as session:
+        dim_stmt = (
+            select(
+                TraceScore.dimension,
+                func.avg(TraceScore.score).label("mean"),
+                func.count(TraceScore.id).label("n"),
+            )
+            .where(
+                TraceScore.tenant_id == tenant.id,
+                TraceScore.created_at >= cutoff,
+            )
+            .group_by(TraceScore.dimension)
+        )
+        dim_rows = list((await session.execute(dim_stmt)).all())
+
+        scored_stmt = select(func.count(func.distinct(TraceScore.trace_id))).where(
+            TraceScore.tenant_id == tenant.id,
+            TraceScore.created_at >= cutoff,
+        )
+        scored_count = int(await session.scalar(scored_stmt) or 0)
+
+        trend_stmt = (
+            select(
+                func.date_trunc("day", TraceScore.created_at).label("day"),
+                func.avg(TraceScore.score).label("mean"),
+            )
+            .where(
+                TraceScore.tenant_id == tenant.id,
+                TraceScore.created_at >= cutoff,
+            )
+            .group_by("day")
+            .order_by("day")
+        )
+        trend_rows = list((await session.execute(trend_stmt)).all())
+
+    dimensions = [
+        QualityDimension(
+            dimension=row.dimension,
+            mean_score=round(float(row.mean or 0.0), 4),
+            sample_count=int(row.n or 0),
+        )
+        for row in dim_rows
+    ]
+    daily_trend: list[dict[str, float | str]] = [
+        {"date": row.day.date().isoformat(), "score": round(float(row.mean or 0.0), 4)}
+        for row in trend_rows
+    ]
+
+    return QualityKpiResponse(
+        window_hours=window_hours,
+        scored_traces=scored_count,
+        dimensions=dimensions,
+        daily_trend=daily_trend,
+    )

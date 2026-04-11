@@ -128,6 +128,42 @@ class AppConfig:
     rate_limit_ingest: int = field(default_factory=lambda: _env_int("RATE_LIMIT_INGEST", 10_000))
     rate_limit_read: int = field(default_factory=lambda: _env_int("RATE_LIMIT_READ", 500))
 
+    # ─ Eval / continuous quality ─────────────────────────────────────
+    # How often (seconds) the background worker polls for pending
+    # EvalRun rows and ships them through run_regression.
+    eval_worker_interval_seconds: int = field(
+        default_factory=lambda: _env_int("EVAL_WORKER_INTERVAL_SECONDS", 15),
+    )
+    # How often the auto-scoring loop samples new traces.
+    eval_autoscorer_interval_seconds: int = field(
+        default_factory=lambda: _env_int("EVAL_AUTOSCORER_INTERVAL_SECONDS", 60),
+    )
+    # Fraction of new traces to score (0.0 = off, 1.0 = every trace).
+    eval_autoscorer_sample_rate: float = field(
+        default_factory=lambda: float(_env("EVAL_AUTOSCORER_SAMPLE_RATE", "0.1")),
+    )
+    # How many traces at most to score per tick, even at 100% sampling —
+    # caps the LLM spend on high-traffic tenants.
+    eval_autoscorer_batch_size: int = field(
+        default_factory=lambda: _env_int("EVAL_AUTOSCORER_BATCH_SIZE", 5),
+    )
+    # Daily golden-dataset regression cron. Dataset path is YAML/JSON,
+    # format documented in config/eval_datasets/README.md.
+    eval_golden_dataset_path: str = field(
+        default_factory=lambda: _env(
+            "EVAL_GOLDEN_DATASET_PATH", "config/eval_datasets/golden.yaml"
+        ),
+    )
+    # Fail the regression (and alert) if any dimension drops by more
+    # than this fraction vs the previous day's run.
+    eval_regression_threshold: float = field(
+        default_factory=lambda: float(_env("EVAL_REGRESSION_THRESHOLD", "0.05")),
+    )
+    # Run the daily golden regression at this UTC hour (0-23).
+    eval_daily_run_utc_hour: int = field(
+        default_factory=lambda: _env_int("EVAL_DAILY_RUN_UTC_HOUR", 2),
+    )
+
     # Alerting
     slack_default_webhook: str = field(default_factory=lambda: _env("SLACK_WEBHOOK_URL", ""))
     pagerduty_routing_key: str = field(default_factory=lambda: _env("PAGERDUTY_ROUTING_KEY", ""))

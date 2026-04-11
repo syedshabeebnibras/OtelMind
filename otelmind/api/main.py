@@ -14,6 +14,11 @@ from otelmind.api.middleware import register_middleware
 from otelmind.api.rbac_routes import rbac_router
 from otelmind.api.routes import router
 from otelmind.config import settings
+from otelmind.eval.worker import (
+    daily_golden_regression_loop,
+    eval_run_worker_loop,
+    trace_autoscorer_loop,
+)
 from otelmind.instrumentation.tracer import init_tracer, shutdown_tracer
 from otelmind.storage.partitioning import drop_expired_partitions, ensure_partitions
 from otelmind.watchdog.watchdog_agent import WatchdogAgent
@@ -48,6 +53,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     partition_task = asyncio.create_task(_partition_maintenance_loop())
 
+    # Start the three eval workers:
+    #   1. eval_run_worker        — drains pending EvalRun rows
+    #   2. trace_autoscorer       — samples new traces, scores via LLMJudge
+    #   3. daily_golden_regression — daily regression vs golden dataset
+    eval_worker_task = asyncio.create_task(eval_run_worker_loop())
+    autoscorer_task = asyncio.create_task(trace_autoscorer_loop())
+    golden_task = asyncio.create_task(daily_golden_regression_loop())
+
     # Start watchdog in background
     watchdog = WatchdogAgent()
     watchdog_task = asyncio.create_task(watchdog.start())
@@ -58,10 +71,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     watchdog.stop()
     watchdog_task.cancel()
     partition_task.cancel()
-    with suppress(asyncio.CancelledError):
-        await watchdog_task
-    with suppress(asyncio.CancelledError):
-        await partition_task
+    eval_worker_task.cancel()
+    autoscorer_task.cancel()
+    golden_task.cancel()
+    for task in (watchdog_task, partition_task, eval_worker_task, autoscorer_task, golden_task):
+        with suppress(asyncio.CancelledError):
+            await task
     shutdown_tracer()
     logger.info("OtelMind shut down cleanly")
 
