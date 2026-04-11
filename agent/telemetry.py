@@ -2,13 +2,15 @@
 
 This module wraps each LangGraph node to capture span data (timing, inputs,
 outputs, token usage, errors) and POSTs it to the OtelMind /api/v1/ingest
-endpoint on the deployed Koyeb instance.
+endpoint on the deployed backend (Railway production by default, override
+via the OTELMIND_INGEST_URL env var).
 """
 
 from __future__ import annotations
 
 import functools
 import json
+import os
 import time
 import uuid
 from collections.abc import Callable
@@ -17,7 +19,10 @@ from typing import Any
 
 import httpx
 
-OTELMIND_INGEST_URL = "https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/ingest"
+OTELMIND_INGEST_URL = os.environ.get(
+    "OTELMIND_INGEST_URL",
+    "https://otelmind-api-production.up.railway.app/api/v1/ingest",
+)
 
 
 class OtelMindTelemetry:

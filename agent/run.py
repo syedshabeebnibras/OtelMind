@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Runner script — executes the research agent with OtelMind instrumentation.
 
-Sends live telemetry data to the deployed Koyeb OtelMind instance.
+Sends live telemetry data to the deployed OtelMind backend. Defaults to
+the Railway production URL; override with `OTELMIND_BASE_URL` to point at
+a staging instance or your local dev server.
 """
 
 from __future__ import annotations
@@ -16,6 +18,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 
 load_dotenv()
+
+OTELMIND_BASE_URL = os.environ.get(
+    "OTELMIND_BASE_URL",
+    "https://otelmind-api-production.up.railway.app",
+)
 
 # Verify OpenAI key is set — use LLM_API_KEY as fallback
 openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
@@ -119,7 +126,7 @@ def main() -> None:
     print("=" * 70)
     print("OtelMind Research Agent — Live Telemetry Demo")
     print("=" * 70)
-    print("Target: https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app")
+    print(f"Target: {OTELMIND_BASE_URL}")
     print(f"Queries: {len(QUERIES)}")
 
     telemetry = OtelMindTelemetry(service_name="research-agent")
@@ -136,7 +143,7 @@ def main() -> None:
 
     try:
         resp = httpx.get(
-            "https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/dashboard/stats",
+            f"{OTELMIND_BASE_URL}/api/v1/dashboard/stats",
             timeout=10.0,
         )
         import json
@@ -148,9 +155,9 @@ def main() -> None:
         print(f"Could not fetch dashboard: {exc}")
 
     print("\nView full dashboard at:")
-    print("  https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/dashboard/stats")
-    print("  https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/api/v1/traces")
-    print("  https://lively-yolane-shabeebselfprojects-4bc070a2.koyeb.app/docs")
+    print("  https://otelmind-dashboard.vercel.app/traces")
+    print("  https://otelmind-dashboard.vercel.app/evals")
+    print(f"  {OTELMIND_BASE_URL}/docs")
 
 
 if __name__ == "__main__":
