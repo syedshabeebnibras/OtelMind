@@ -1,0 +1,50 @@
+# Vercel only needs the Next.js dashboard. Everything else in this repo
+# is the Python backend (Railway), the MCP server, SDKs, eval configs,
+# docs, and the Python venv. Excluding them keeps CLI uploads small
+# enough to stay under the free-tier file cap, and GitHub-triggered
+# deploys use the project's rootDirectory=dashboard setting anyway.
+
+# Python backend + tooling
+otelmind/
+mcp_server/
+agent/
+sdk-js/
+migrations/
+tests/
+config/
+scripts/
+docs/
+.venv/
+venv/
+*.egg-info/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Build artifacts / lockfiles unrelated to dashboard
+Dockerfile
+Procfile
+railway.json
+nixpacks.toml
+runtime.txt
+alembic.ini
+pyproject.toml
+requirements.txt
+uv.lock
+docker-compose.yml
+
+# Secrets + local files
+.env
+.env.local
+.env.production
+.venv/
+DEPLOY.md
+README.md
+
+# Git + editor noise
+.git/
+.github/
+.idea/
+.vscode/
+.DS_Store
