@@ -74,6 +74,9 @@ class GroupResult:
     shared_context: dict[str, Any]
     started_at: datetime
     completed_at: datetime
+    budget_usd: float | None = None
+    budget_remaining_usd: float | None = None
+    cost_usd: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -95,6 +98,9 @@ class GroupResult:
             "shared_context": self.shared_context,
             "started_at": self.started_at.isoformat(),
             "completed_at": self.completed_at.isoformat(),
+            "budget_usd": self.budget_usd,
+            "budget_remaining_usd": self.budget_remaining_usd,
+            "cost_usd": round(self.cost_usd, 6),
         }
 
 
@@ -107,6 +113,7 @@ class AgentGroup:
         protocol: CommunicationProtocol,
         api_key: str | None = None,
         max_rounds: int | None = None,
+        budget_usd: float | None = None,
     ) -> None:
         if not roles:
             raise ValueError("AgentGroup requires at least one role")
@@ -114,6 +121,7 @@ class AgentGroup:
         self._protocol = protocol
         self._api_key = api_key or settings.anthropic_api_key
         self._max_rounds = max_rounds or settings.multiagent_max_rounds
+        self._budget_usd = budget_usd
         self._tracer = GroupTracer()
         self._client: Any | None = None
 
@@ -145,6 +153,9 @@ class AgentGroup:
 
     async def solve(self, problem: str, context: str = "") -> GroupResult:
         """Run the protocol to completion and return the full trace."""
+        # Local import to avoid a circular dependency on group_metrics → group
+        from otelmind.eval.group_metrics import _estimate_cost
+
         started = datetime.now(UTC)
         agents = self._instantiate()
         state = GroupState(shared_context={"problem": problem, "context": context})
@@ -171,8 +182,26 @@ class AgentGroup:
                         state.shared_context["error"] = str(exc)
                         break
 
+                # Budget check after each round — break out before the next one.
+                if self._budget_usd is not None and state.status == "in_progress":
+                    cost_so_far = _estimate_cost(state.messages)
+                    if cost_so_far >= self._budget_usd:
+                        state.status = "budget_exceeded"
+                        logger.info(
+                            "multiagent: budget ${:.4f} exceeded after round {} "
+                            "(spent ${:.4f}) — stopping",
+                            self._budget_usd,
+                            state.round_number,
+                            cost_so_far,
+                        )
+                        break
+
         completed = datetime.now(UTC)
         total_tokens = sum(a.tokens_used for a in agents)
+        cost_usd = _estimate_cost(state.messages)
+        budget_remaining = (
+            max(0.0, self._budget_usd - cost_usd) if self._budget_usd is not None else None
+        )
 
         if state.status == "in_progress":
             # Protocols that detect deadlock/convergence mark the status themselves
@@ -194,6 +223,9 @@ class AgentGroup:
             shared_context=state.shared_context,
             started_at=started,
             completed_at=completed,
+            budget_usd=self._budget_usd,
+            budget_remaining_usd=budget_remaining,
+            cost_usd=cost_usd,
         )
 
     async def _call_agent(
