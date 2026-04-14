@@ -32,6 +32,10 @@ jobs:
       POSTGRES_USER: otelmind
       POSTGRES_PASSWORD: otelmind
       DATABASE_URL_SYNC: postgresql://otelmind:otelmind@localhost:5432/otelmind
+      # When the repo has an ANTHROPIC_API_KEY secret configured, the live
+      # multi-agent integration tests run against the real Claude API.
+      # Without the secret the tests skip cleanly.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
       - uses: actions/checkout@v5
