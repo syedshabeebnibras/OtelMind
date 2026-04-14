@@ -221,7 +221,7 @@ class AgentGroup:
             )
         except Exception:  # pragma: no cover — anthropic ImportError handled in _ensure_client
             retryable = (Exception,)
-            AsyncRetrying = None  # type: ignore[assignment]  # noqa: N806
+            AsyncRetrying = None  # type: ignore[assignment,misc]  # noqa: N806
 
         async def _once() -> Any:
             return await client.messages.create(

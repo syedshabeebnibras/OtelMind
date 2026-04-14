@@ -408,10 +408,10 @@ async def _autoscore_tenant(tenant: Tenant, judge: LLMJudge) -> int:
     for row in result.per_case:
         if row["error"] is not None:
             continue
-        trace = traces_by_id.get(row["id"])
-        if trace is None or not row["dimensions"]:
+        matched = traces_by_id.get(row["id"])
+        if matched is None or not row["dimensions"]:
             continue
-        await _persist_batch_scores(tenant.id, trace.trace_id, row["dimensions"])
+        await _persist_batch_scores(tenant.id, matched.trace_id, row["dimensions"])
         scored += 1
     return scored
 
