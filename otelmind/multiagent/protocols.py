@@ -15,6 +15,12 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from otelmind.watchdog.detectors.semantic_drift import (
+    _cosine_similarity,
+    _tfidf_vector,
+    _tokenize,
+)
+
 if TYPE_CHECKING:
     from otelmind.multiagent.group import AgentInstance, GroupState
     from otelmind.multiagent.tracer import GroupTracer
@@ -297,7 +303,7 @@ class ConsensusProtocol(CommunicationProtocol):
             )
             proposals[agent.agent_id] = text.strip()
 
-        # Tally normalized proposals
+        # Step 1: literal majority on normalized text
         tally: dict[str, int] = {}
         for proposal in proposals.values():
             key = proposal.lower()[:200]
@@ -305,12 +311,42 @@ class ConsensusProtocol(CommunicationProtocol):
 
         top_key, top_count = max(tally.items(), key=lambda kv: kv[1])
         majority = top_count > len(agents) // 2
+        winning_proposal: str | None = None
+        if majority:
+            winning_proposal = next(
+                p for p in proposals.values() if p.lower()[:200] == top_key
+            )
+
+        # Step 2: semantic similarity fallback. Two agents may agree in
+        # substance while differing in phrasing — TF-IDF cosine clusters
+        # those into the same vote. Threshold 0.7 mirrors the drift detector.
+        if not majority:
+            vectors = {aid: _tfidf_vector(_tokenize(text)) for aid, text in proposals.items()}
+            agent_ids = list(proposals.keys())
+            assigned: set[str] = set()
+            for i, aid_i in enumerate(agent_ids):
+                if aid_i in assigned:
+                    continue
+                cluster = {aid_i}
+                for aid_j in agent_ids[i + 1 :]:
+                    if aid_j in assigned:
+                        continue
+                    if _cosine_similarity(vectors[aid_i], vectors[aid_j]) > 0.7:
+                        cluster.add(aid_j)
+                if len(cluster) > len(agents) // 2:
+                    majority = True
+                    winning_proposal = proposals[aid_i]
+                    logger.info(
+                        "ConsensusProtocol: semantic majority of {} on round {}",
+                        len(cluster),
+                        round_number,
+                    )
+                    break
+                assigned |= cluster
 
         if majority:
             shared_state.status = "converged"
-            shared_state.final_output = next(
-                p for p in proposals.values() if p.lower()[:200] == top_key
-            )
+            shared_state.final_output = winning_proposal
         elif round_number >= self.max_rounds:
             shared_state.status = "deadlocked"
             shared_state.final_output = proposals[agents[0].agent_id]

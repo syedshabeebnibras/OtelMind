@@ -204,13 +204,50 @@ async def test_consensus_detects_majority():
 
 
 @pytest.mark.asyncio
+async def test_consensus_detects_semantic_agreement():
+    """Two agents say the same thing differently — TF-IDF cosine clusters them.
+
+    Literal-match tally would see 3 distinct strings and fail to find a
+    majority. The semantic-similarity fallback should cluster the first two
+    agents and declare convergence.
+    """
+    agents = [_agent("voter", i) for i in range(3)]
+    state = _state()
+    proto = ConsensusProtocol(max_rounds=3)
+    tracer = GroupTracer()
+
+    responses = {
+        "voter-0": "the answer is forty two and the value is forty two",
+        "voter-1": "forty two is the answer the value forty two answer",
+        "voter-2": "completely unrelated banana cake recipe today",
+    }
+
+    async def call_agent(agent, messages, round_number):
+        return responses[agent.agent_id], {"total_tokens": 5}
+
+    result_state = await proto.execute_round(
+        agents, state, round_number=1, call_agent=call_agent, tracer=tracer
+    )
+    assert result_state.status == "converged"
+    assert result_state.final_output is not None
+    # The winning output should be one of the two semantically-aligned voters
+    assert result_state.final_output in {responses["voter-0"], responses["voter-1"]}
+
+
+@pytest.mark.asyncio
 async def test_consensus_deadlocks_after_max_rounds():
     agents = [_agent("voter", i) for i in range(3)]
     state = _state()
     proto = ConsensusProtocol(max_rounds=2)
     tracer = GroupTracer()
 
-    responses = ["answer A", "answer B", "answer C"]
+    # Three semantically distinct positions — neither literal nor TF-IDF
+    # cosine should cluster these into a majority.
+    responses = [
+        "the recommendation is to migrate to postgres immediately",
+        "kafka streaming with snowflake aggregation handles this best",
+        "rewrite everything in rust using actix and async tokio runtime",
+    ]
     idx = 0
 
     async def call_agent(agent, messages, round_number):
