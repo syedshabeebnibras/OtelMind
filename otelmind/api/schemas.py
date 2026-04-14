@@ -311,3 +311,102 @@ class QualityKpiResponse(BaseModel):
     scored_traces: int
     dimensions: list[QualityDimension]
     daily_trend: list[dict[str, float | str]]
+
+
+# ── Multi-agent group runs ──────────────────────────────────────────────
+
+
+class GroupRunCreate(BaseModel):
+    problem: str
+    context: str = ""
+    roles: list[dict[str, Any]]  # [{name, system_prompt, model?, max_tokens?, temperature?}]
+    protocol: str = "round_robin"  # round_robin, debate, blackboard, consensus, delegation
+    max_rounds: int = 5
+    expected_output: str | None = None
+    budget_usd: float | None = None
+
+
+class GroupRunSummary(BaseModel):
+    id: str
+    problem: str
+    protocol: str
+    status: str
+    rounds_completed: int
+    total_tokens: int
+    total_cost_usd: float
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+class GroupRunResponse(GroupRunSummary):
+    pass
+
+
+class GroupRunDetail(GroupRunSummary):
+    roles: list[dict[str, Any]]
+    result: dict[str, Any] | None = None
+    metrics: dict[str, Any] | None = None
+    messages: list[dict[str, Any]] = []
+
+
+class GroupMessageResponse(BaseModel):
+    sender_id: str
+    sender_role: str
+    recipient_id: str | None = None
+    content: str
+    round_number: int
+    token_usage: dict[str, int] | None = None
+    created_at: datetime
+
+
+class GroupRunsListResponse(BaseModel):
+    items: list[GroupRunSummary]
+    total: int
+
+
+# ── Judge calibration ─────────────────────────────────────────────────
+
+
+class CalibrationCaseInput(BaseModel):
+    id: str
+    question: str
+    expected: str = ""
+    actual: str
+    context: str = ""
+
+
+class CalibrationLabelInput(BaseModel):
+    case_id: str
+    dimension: str
+    score: float  # normalized 0-1
+    annotator_id: str | None = None
+
+
+class CalibrationCreate(BaseModel):
+    test_cases: list[CalibrationCaseInput]
+    human_labels: list[CalibrationLabelInput]
+    dimensions: list[str] | None = None
+
+
+class CalibrationSummary(BaseModel):
+    id: int
+    judge_model: str
+    cohens_kappa: float | None = None
+    agreement_rate: float | None = None
+    bias: float | None = None
+    case_count: int
+    created_at: datetime
+
+
+class CalibrationDetail(CalibrationSummary):
+    per_dimension: dict[str, Any] | None = None
+    calibration_curve: list[dict[str, Any]] | None = None
+
+
+class CalibrationResponse(CalibrationDetail):
+    pass
+
+
+class CalibrationsListResponse(BaseModel):
+    items: list[CalibrationSummary]
+    total: int
