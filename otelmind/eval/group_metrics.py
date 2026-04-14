@@ -222,7 +222,7 @@ async def evaluate_group(
     correction_method = "regex"
 
     judge_for_corrections = judge
-    if judge_for_corrections is not None and getattr(judge_for_corrections, "_api_key", ""):
+    if judge_for_corrections is not None and bool(getattr(judge_for_corrections, "_api_key", None)):
         try:
             llm_counts = await _detect_corrections_with_llm(messages, judge_for_corrections)
             if llm_counts:

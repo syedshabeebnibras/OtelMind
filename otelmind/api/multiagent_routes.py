@@ -143,7 +143,8 @@ async def create_group_run(
     _: Annotated[None, Depends(require_scope("write", "admin"))],
 ) -> GroupRunResponse:
     """Spawn a multi-agent group asynchronously. Returns the run record immediately."""
-    await enforce_tenant_rate_limit(request, tenant, "write")
+    # Bucket = Literal["ingest", "read"] — POST counts against the ingest budget
+    await enforce_tenant_rate_limit(request, tenant, "ingest")
 
     if not body.roles:
         raise HTTPException(status_code=422, detail="at least one role is required")
