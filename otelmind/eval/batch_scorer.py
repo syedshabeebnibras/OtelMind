@@ -101,10 +101,21 @@ class BatchScorer:
         cases: list[EvalCase],
         dimensions: list[str] | None = None,
     ) -> BatchScoringResult:
+        from otelmind.internal_tracing import trace_batch_scoring
+
         total = len(cases)
         if total == 0:
             return BatchScoringResult(total=0, scored=0, failed=0, duration_seconds=0.0)
 
+        with trace_batch_scoring(total_cases=total, concurrency=self._concurrency):
+            return await self._score_batch_inner(cases, dimensions, total)
+
+    async def _score_batch_inner(
+        self,
+        cases: list[EvalCase],
+        dimensions: list[str] | None,
+        total: int,
+    ) -> BatchScoringResult:
         semaphore = asyncio.Semaphore(self._concurrency)
         completed = 0
         start = time.monotonic()

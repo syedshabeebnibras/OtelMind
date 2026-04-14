@@ -190,38 +190,41 @@ class LLMJudge:
     async def _score_dimension(
         self, dimension: str, question: str, answer: str, context: str
     ) -> DimensionScore:
+        from otelmind.internal_tracing import trace_judge_call
+
         prompt = _DIMENSION_PROMPTS[dimension].format(
             question=question[:500], answer=answer[:1000], context=context[:500]
         )
-        try:
-            import openai
+        with trace_judge_call(dimension=dimension, model=self._model):
+            try:
+                import openai
 
-            client = openai.AsyncOpenAI(api_key=self._api_key)
-            resp = await client.chat.completions.create(
-                model=self._model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=100,
-            )
-            data = json.loads(resp.choices[0].message.content or "{}")
-            raw = int(data.get("score", 3))
-            raw = max(1, min(5, raw))
-            return DimensionScore(
-                dimension=dimension,
-                score=(raw - 1) / 4,
-                raw_score=raw,
-                reason=data.get("reason", ""),
-                method="llm",
-            )
-        except Exception as exc:
-            logger.warning("Judge score failed for %s: %s", dimension, exc)
-            return DimensionScore(
-                dimension=dimension,
-                score=0.5,
-                raw_score=3,
-                reason="Scoring failed",
-                method="heuristic",
-            )
+                client = openai.AsyncOpenAI(api_key=self._api_key)
+                resp = await client.chat.completions.create(
+                    model=self._model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=100,
+                )
+                data = json.loads(resp.choices[0].message.content or "{}")
+                raw = int(data.get("score", 3))
+                raw = max(1, min(5, raw))
+                return DimensionScore(
+                    dimension=dimension,
+                    score=(raw - 1) / 4,
+                    raw_score=raw,
+                    reason=data.get("reason", ""),
+                    method="llm",
+                )
+            except Exception as exc:
+                logger.warning("Judge score failed for %s: %s", dimension, exc)
+                return DimensionScore(
+                    dimension=dimension,
+                    score=0.5,
+                    raw_score=3,
+                    reason="Scoring failed",
+                    method="heuristic",
+                )
 
     def _heuristic_fallback(
         self, question: str, answer: str, context: str, dims: list[str]
