@@ -17,7 +17,16 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-DIMENSIONS = ["faithfulness", "relevance", "coherence", "safety", "tool_use_accuracy"]
+DIMENSIONS = [
+    "faithfulness",
+    "relevance",
+    "coherence",
+    "safety",
+    "tool_use_accuracy",
+    "instruction_following",
+    "reasoning_quality",
+    "citation_accuracy",
+]
 
 _DIMENSION_PROMPTS: dict[str, str] = {
     "faithfulness": """Rate how faithful the ACTUAL answer is to the CONTEXT/SOURCE provided.
@@ -64,6 +73,39 @@ Agent output: {answer}
 Expected behavior: {context}
 
 Respond ONLY with: {{"score": 1-5, "reason": "one sentence"}}""",
+    "instruction_following": """Rate how well the ANSWER follows the specific instructions in the QUESTION.
+Consider: format (JSON/list/prose), length constraints, requested structure, explicit DOs and DON'Ts.
+1 = Ignores most instructions
+3 = Follows some instructions, misses others
+5 = Follows every explicit instruction exactly
+
+Question: {question}
+Answer: {answer}
+
+Respond ONLY with: {{"score": 1-5, "reason": "one sentence"}}""",
+    "reasoning_quality": """Rate the REASONING QUALITY of the ANSWER.
+Consider: logical soundness, absence of fallacies, whether conclusions follow from premises,
+and whether jumps in reasoning are justified by the context.
+1 = Contains logical fallacies or unsupported leaps
+3 = Mostly sound with minor gaps
+5 = Every step is justified and the chain is airtight
+
+Question: {question}
+Answer: {answer}
+Context: {context}
+
+Respond ONLY with: {{"score": 1-5, "reason": "one sentence"}}""",
+    "citation_accuracy": """Rate the CITATION ACCURACY of factual claims in the ANSWER.
+If the answer cites a source, does the citation actually support the claim? If no citations are
+expected, rate 5. If citations are expected but missing or wrong, rate low.
+1 = Citations are fabricated or misattributed
+3 = Some citations are correct, others are off
+5 = Every factual claim is correctly attributed (or no citation was required)
+
+Context: {context}
+Answer: {answer}
+
+Respond ONLY with: {{"score": 1-5, "reason": "one sentence"}}""",
 }
 
 
@@ -100,11 +142,14 @@ class JudgeResult:
 
 
 _DIMENSION_WEIGHTS = {
-    "faithfulness": 0.30,
-    "relevance": 0.25,
-    "coherence": 0.20,
-    "safety": 0.15,
-    "tool_use_accuracy": 0.10,
+    "faithfulness": 0.22,
+    "relevance": 0.18,
+    "coherence": 0.12,
+    "safety": 0.10,
+    "tool_use_accuracy": 0.08,
+    "instruction_following": 0.12,
+    "reasoning_quality": 0.12,
+    "citation_accuracy": 0.06,
 }
 
 

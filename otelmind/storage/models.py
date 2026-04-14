@@ -470,3 +470,86 @@ class RemediationAction(Base):
         Index("ix_remediation_failure_id", "failure_id"),
         Index("ix_remediation_status", "status"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Multi-agent group eval
+# ---------------------------------------------------------------------------
+
+
+class GroupRun(Base):
+    """A single multi-agent group execution."""
+
+    __tablename__ = "group_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    problem: Mapped[str] = mapped_column(Text, nullable=False)
+    protocol: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
+    roles: Mapped[list] = mapped_column(JSONB, nullable=False)
+    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    metrics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    rounds_completed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_group_runs_tenant", "tenant_id"),
+        Index("ix_group_runs_status", "status"),
+    )
+
+
+class GroupMessage(Base):
+    """A single inter-agent message within a group run."""
+
+    __tablename__ = "group_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("group_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sender_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    sender_role: Mapped[str] = mapped_column(String(128), nullable=False)
+    recipient_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    token_usage: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_group_messages_run", "group_run_id"),)
+
+
+class JudgeCalibration(Base):
+    """Calibration run of the LLM judge against human labels."""
+
+    __tablename__ = "judge_calibrations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    judge_model: Mapped[str] = mapped_column(String(128), nullable=False)
+    cohens_kappa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    agreement_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bias: Mapped[float | None] = mapped_column(Float, nullable=True)
+    per_dimension: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    calibration_curve: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    case_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("ix_calibrations_tenant", "tenant_id"),)
