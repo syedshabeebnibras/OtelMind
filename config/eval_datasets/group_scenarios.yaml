@@ -1,0 +1,112 @@
+# Multi-agent group benchmark scenarios.
+# Each scenario is a collaborative task. The recommended roles/protocol are
+# hints, not constraints — MetaEvaluator / evaluate_group will score the
+# resulting collaboration regardless.
+
+scenarios:
+  - id: "debug-python-bug"
+    problem: "The following Python function is supposed to sort a list of dictionaries by a nested key, but it fails on edge cases. Find and fix the bug."
+    context: |
+      def sort_by_nested(items, key_path):
+          keys = key_path.split('.')
+          def get_nested(d, keys):
+              for k in keys:
+                  d = d[k]
+              return d
+          return sorted(items, key=lambda x: get_nested(x, keys))
+    expected_output: "Handle KeyError for missing keys, handle None values, handle non-dict items at any nesting level."
+    recommended_roles: ["coder", "reviewer"]
+    recommended_protocol: "debate"
+    difficulty: "medium"
+
+  - id: "design-api-schema"
+    problem: "Design a REST API schema for a multi-tenant task management system with real-time collaboration."
+    context: "Must support workspaces, projects, tasks with subtasks, comments, file attachments, real-time updates via WebSocket, and role-based access control."
+    expected_output: "A complete endpoint list with request/response schemas and resource hierarchies; includes auth, pagination, websocket channel spec, and RBAC roles."
+    recommended_roles: ["planner", "coder", "reviewer"]
+    recommended_protocol: "delegation"
+    difficulty: "hard"
+
+  - id: "code-review-auth-middleware"
+    problem: "Review the following authentication middleware for security vulnerabilities and recommend fixes."
+    context: |
+      def auth_middleware(request):
+          token = request.headers.get("Authorization", "").replace("Bearer ", "")
+          if not token:
+              return {"error": "unauthorized"}, 401
+          payload = jwt.decode(token, SECRET, algorithms=["HS256", "none"])
+          request.user = payload["user_id"]
+          return None
+    expected_output: "Call out the `alg=none` acceptance, missing expiry check, missing signature length validation, and the use of a hardcoded SECRET."
+    recommended_roles: ["reviewer", "critic", "coder"]
+    recommended_protocol: "round_robin"
+    difficulty: "medium"
+
+  - id: "technical-writing-runbook"
+    problem: "Produce an on-call runbook for 'Postgres replication lag > 5 minutes' in under 300 words."
+    context: "Team uses Patroni + streaming replication. Primary is in us-east-1, replica in us-west-2."
+    expected_output: "Ordered steps: detect, triage WAL sender/receiver, check network/CPU/IO, failover criteria, escalation, postmortem fields."
+    recommended_roles: ["planner", "reviewer"]
+    recommended_protocol: "round_robin"
+    difficulty: "easy"
+
+  - id: "data-analysis-churn"
+    problem: "Given a monthly signup cohort dataset, propose a methodology for measuring 90-day churn accurately."
+    context: "Data has ambiguous 'last active' fields (multiple event types), subscription pauses, and free-tier → paid conversions."
+    expected_output: "Explicit churn definition, cohort binning, handling of pauses/downgrades, and confidence interval approach."
+    recommended_roles: ["researcher", "critic"]
+    recommended_protocol: "debate"
+    difficulty: "medium"
+
+  - id: "system-architecture-rate-limiter"
+    problem: "Architect a distributed rate limiter that supports per-user and per-endpoint quotas across 10+ API gateway pods."
+    context: "Redis available but must survive Redis unavailability with graceful degradation. 99.9p target latency: <2ms."
+    expected_output: "Token bucket vs sliding window tradeoff, Redis Lua script, fallback to local bucket on Redis failure, quota sync strategy."
+    recommended_roles: ["planner", "coder", "critic"]
+    recommended_protocol: "delegation"
+    difficulty: "hard"
+
+  - id: "debug-race-condition"
+    problem: "A background worker occasionally processes the same job twice. Diagnose the race condition and propose a fix."
+    context: |
+      Worker code pseudocode:
+        job = SELECT * FROM jobs WHERE status='pending' LIMIT 1;
+        if job:
+            process(job);
+            UPDATE jobs SET status='done' WHERE id=job.id;
+      Workers scale horizontally.
+    expected_output: "Classic lost-update race; fix via `SELECT ... FOR UPDATE SKIP LOCKED` or atomic claim UPDATE with WHERE status='pending' RETURNING."
+    recommended_roles: ["coder", "reviewer", "critic"]
+    recommended_protocol: "consensus"
+    difficulty: "medium"
+
+  - id: "api-integration-webhook-retry"
+    problem: "Design webhook delivery with exponential backoff, circuit breaker, and dead-letter handling."
+    context: "Customers receive <= 100 webhooks/sec each. Must handle 5xx, 429, connection timeouts, and slow responses differently."
+    expected_output: "Backoff schedule, error-class matrix, circuit-breaker threshold, DLQ schema, alarm signals."
+    recommended_roles: ["planner", "coder", "reviewer"]
+    recommended_protocol: "delegation"
+    difficulty: "medium"
+
+  - id: "security-audit-file-upload"
+    problem: "Audit a file-upload feature for security issues and propose mitigations."
+    context: "API accepts multipart/form-data with filename controlled by the client; files stored locally and served under /uploads/<filename>."
+    expected_output: "Path traversal risk, content-type mismatch, SVG XSS, executable extensions, MIME sniffing, storage isolation recommendations."
+    recommended_roles: ["reviewer", "critic"]
+    recommended_protocol: "round_robin"
+    difficulty: "medium"
+
+  - id: "performance-optimization-nplusone"
+    problem: "Identify and fix the N+1 query and general performance issues in this endpoint."
+    context: |
+      @app.get("/projects")
+      def list_projects():
+          projects = Project.query.all()
+          return [
+              {"id": p.id, "name": p.name, "tasks": [t.title for t in p.tasks]}
+              for p in projects
+          ]
+    expected_output: "Point out the N+1 on p.tasks, add eager loading (joinedload/selectinload), paginate, select only needed columns, and cache where appropriate."
+    recommended_roles: ["coder", "reviewer"]
+    recommended_protocol: "consensus"
+    difficulty: "easy"
