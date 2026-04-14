@@ -101,9 +101,12 @@ app.include_router(router, prefix="")
 app.include_router(rbac_router, prefix="/api/v1")
 app.include_router(rbac_router, prefix="/api")
 
-# Multi-agent group runs and judge calibration — already prefix-bound
-app.include_router(multiagent_router)
-app.include_router(calibration_router)
+# Multi-agent group runs and judge calibration — mount under both
+# /api/v1 (versioned, dashboard uses this) and /api (back-compat).
+app.include_router(multiagent_router, prefix="/api/v1")
+app.include_router(multiagent_router, prefix="/api")
+app.include_router(calibration_router, prefix="/api/v1")
+app.include_router(calibration_router, prefix="/api")
 
 
 def main() -> None:

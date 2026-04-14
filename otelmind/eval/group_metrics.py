@@ -232,9 +232,7 @@ async def evaluate_group(
                     per_agent_corrections_received[agent_id] = payload.get(
                         "corrections_received", 0
                     )
-                error_corrections = sum(
-                    p.get("corrections_made", 0) for p in llm_counts.values()
-                )
+                error_corrections = sum(p.get("corrections_made", 0) for p in llm_counts.values())
         except Exception as exc:
             logger.warning("evaluate_group: LLM correction detector failed, falling back: {}", exc)
 

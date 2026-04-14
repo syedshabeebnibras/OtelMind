@@ -43,7 +43,7 @@ from otelmind.multiagent.protocols import (
 from otelmind.multiagent.roles import AgentRole
 from otelmind.storage.models import GroupMessage, GroupRun
 
-router = APIRouter(prefix="/api/multiagent", tags=["multiagent"])
+router = APIRouter(prefix="/multiagent", tags=["multiagent"])
 
 _PROTOCOL_MAP: dict[str, type] = {
     "round_robin": RoundRobinProtocol,
@@ -226,9 +226,7 @@ async def get_group_run(
             raise HTTPException(status_code=404, detail="group run not found")
 
         msg_stmt = (
-            select(GroupMessage)
-            .where(GroupMessage.group_run_id == rid)
-            .order_by(GroupMessage.id)
+            select(GroupMessage).where(GroupMessage.group_run_id == rid).order_by(GroupMessage.id)
         )
         messages = list((await session.execute(msg_stmt)).scalars().all())
 
@@ -265,18 +263,14 @@ async def get_group_messages(
         raise HTTPException(status_code=422, detail="invalid run_id") from exc
 
     async with get_session() as session:
-        owner = await session.scalar(
-            select(GroupRun.tenant_id).where(GroupRun.id == rid)
-        )
+        owner = await session.scalar(select(GroupRun.tenant_id).where(GroupRun.id == rid))
         if owner is None:
             raise HTTPException(status_code=404, detail="group run not found")
         if owner != tenant.id:
             raise HTTPException(status_code=404, detail="group run not found")
 
         msg_stmt = (
-            select(GroupMessage)
-            .where(GroupMessage.group_run_id == rid)
-            .order_by(GroupMessage.id)
+            select(GroupMessage).where(GroupMessage.group_run_id == rid).order_by(GroupMessage.id)
         )
         messages = list((await session.execute(msg_stmt)).scalars().all())
 

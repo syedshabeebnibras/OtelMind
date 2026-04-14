@@ -54,9 +54,7 @@ async def test_round_robin_live_two_agents_one_round():
         max_rounds=1,
     )
 
-    result = await group.solve(
-        "In one line of Python, return the sum of two integers."
-    )
+    result = await group.solve("In one line of Python, return the sum of two integers.")
 
     # Structural invariants — break only on real integration regression
     assert result.status == "completed", f"expected completed, got {result.status!r}"

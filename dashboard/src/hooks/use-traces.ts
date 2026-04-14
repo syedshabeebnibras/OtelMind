@@ -193,3 +193,54 @@ export function useEvalRuns(limit = 50) {
     mutate,
   };
 }
+
+// ── Multi-agent group runs ───────────────────────────────────────────────────
+
+export function useGroupRuns(limit = 50) {
+  const { data, error, isLoading, mutate } = useSWR(
+    ["group-runs", limit],
+    () => api.multiagent.list({ limit }),
+    { refreshInterval: 30_000 }
+  );
+  return {
+    runs: data?.items ?? [],
+    total: data?.total ?? 0,
+    isLoading,
+    isError: !!error,
+    error,
+    mutate,
+  };
+}
+
+export function useGroupRun(id: string | null) {
+  const { data, error, isLoading, mutate } = useSWR(
+    id ? ["group-run", id] : null,
+    () => (id ? api.multiagent.get(id) : null),
+    { refreshInterval: 15_000 }
+  );
+  return { run: data ?? null, isLoading, isError: !!error, mutate };
+}
+
+// ── Calibrations ─────────────────────────────────────────────────────────────
+
+export function useCalibrations(limit = 50) {
+  const { data, error, isLoading, mutate } = useSWR(
+    ["calibrations", limit],
+    () => api.calibrations.list({ limit }),
+  );
+  return {
+    items: data?.items ?? [],
+    total: data?.total ?? 0,
+    isLoading,
+    isError: !!error,
+    mutate,
+  };
+}
+
+export function useCalibration(id: number | string | null) {
+  const { data, error, isLoading } = useSWR(
+    id ? ["calibration", id] : null,
+    () => (id ? api.calibrations.get(id) : null),
+  );
+  return { calibration: data ?? null, isLoading, isError: !!error };
+}

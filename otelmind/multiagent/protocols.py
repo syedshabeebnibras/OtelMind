@@ -313,9 +313,7 @@ class ConsensusProtocol(CommunicationProtocol):
         majority = top_count > len(agents) // 2
         winning_proposal: str | None = None
         if majority:
-            winning_proposal = next(
-                p for p in proposals.values() if p.lower()[:200] == top_key
-            )
+            winning_proposal = next(p for p in proposals.values() if p.lower()[:200] == top_key)
 
         # Step 2: semantic similarity fallback. Two agents may agree in
         # substance while differing in phrasing — TF-IDF cosine clusters

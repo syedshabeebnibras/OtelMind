@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-DATASET_PATH = Path(__file__).resolve().parents[2] / "config" / "eval_datasets" / "human_labels.yaml"
+DATASET_PATH = (
+    Path(__file__).resolve().parents[2] / "config" / "eval_datasets" / "human_labels.yaml"
+)
 
 
 @pytest.fixture(scope="module")

@@ -149,7 +149,10 @@ async def test_evaluate_group_uses_llm_correction_detector_when_judge_has_key(mo
             "a-0": {"corrections_made": 0, "corrections_received": 1},
         }
 
-    with patch("otelmind.eval.group_metrics._detect_corrections_with_llm", AsyncMock(side_effect=fake_detect)):
+    with patch(
+        "otelmind.eval.group_metrics._detect_corrections_with_llm",
+        AsyncMock(side_effect=fake_detect),
+    ):
         eval_result = await evaluate_group(result, judge=judge, max_rounds=5)
 
     assert eval_result.error_correction_count == 1

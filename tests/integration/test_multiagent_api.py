@@ -87,7 +87,7 @@ def stub_background(monkeypatch):
     return spawned
 
 
-# ─── POST /api/multiagent/runs ─────────────────────────────────────────────
+# ─── POST /api/v1/multiagent/runs ─────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
@@ -100,7 +100,7 @@ async def test_create_run_returns_id_immediately(auth, stub_session, stub_backgr
     }
     async with _client() as client:
         resp = await client.post(
-            "/api/multiagent/runs", json=body, headers={"x-api-key": "test"}
+            "/api/v1/multiagent/runs", json=body, headers={"x-api-key": "test"}
         )
     assert resp.status_code == 202, resp.text
     data = resp.json()
@@ -115,7 +115,7 @@ async def test_create_run_rejects_empty_roles(auth, stub_session, stub_backgroun
     body = {"problem": "x", "roles": []}
     async with _client() as client:
         resp = await client.post(
-            "/api/multiagent/runs", json=body, headers={"x-api-key": "test"}
+            "/api/v1/multiagent/runs", json=body, headers={"x-api-key": "test"}
         )
     assert resp.status_code == 422
 
@@ -129,7 +129,7 @@ async def test_create_run_rejects_unknown_protocol(auth, stub_session, stub_back
     }
     async with _client() as client:
         resp = await client.post(
-            "/api/multiagent/runs", json=body, headers={"x-api-key": "test"}
+            "/api/v1/multiagent/runs", json=body, headers={"x-api-key": "test"}
         )
     assert resp.status_code == 422
     assert "telepathy" in resp.text
@@ -139,17 +139,17 @@ async def test_create_run_rejects_unknown_protocol(auth, stub_session, stub_back
 async def test_create_run_requires_auth(stub_session, stub_background):
     body = {"problem": "x", "roles": [{"name": "a", "system_prompt": "p"}]}
     async with _client() as client:
-        resp = await client.post("/api/multiagent/runs", json=body)
+        resp = await client.post("/api/v1/multiagent/runs", json=body)
     assert resp.status_code in (401, 403, 422)
 
 
-# ─── GET /api/multiagent/runs ──────────────────────────────────────────────
+# ─── GET /api/v1/multiagent/runs ──────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_list_runs_empty(auth, stub_session):
     async with _client() as client:
-        resp = await client.get("/api/multiagent/runs", headers={"x-api-key": "test"})
+        resp = await client.get("/api/v1/multiagent/runs", headers={"x-api-key": "test"})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["items"] == []
@@ -160,20 +160,18 @@ async def test_list_runs_empty(auth, stub_session):
 async def test_list_runs_passes_status_filter(auth, stub_session):
     async with _client() as client:
         resp = await client.get(
-            "/api/multiagent/runs?status=completed&limit=5", headers={"x-api-key": "test"}
+            "/api/v1/multiagent/runs?status=completed&limit=5", headers={"x-api-key": "test"}
         )
     assert resp.status_code == 200
 
 
-# ─── GET /api/multiagent/runs/{id} ─────────────────────────────────────────
+# ─── GET /api/v1/multiagent/runs/{id} ─────────────────────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_get_run_invalid_uuid_422(auth, stub_session):
     async with _client() as client:
-        resp = await client.get(
-            "/api/multiagent/runs/not-a-uuid", headers={"x-api-key": "test"}
-        )
+        resp = await client.get("/api/v1/multiagent/runs/not-a-uuid", headers={"x-api-key": "test"})
     assert resp.status_code == 422
 
 
@@ -181,19 +179,19 @@ async def test_get_run_invalid_uuid_422(auth, stub_session):
 async def test_get_run_missing_returns_404(auth, stub_session):
     async with _client() as client:
         resp = await client.get(
-            f"/api/multiagent/runs/{uuid.uuid4()}", headers={"x-api-key": "test"}
+            f"/api/v1/multiagent/runs/{uuid.uuid4()}", headers={"x-api-key": "test"}
         )
     assert resp.status_code == 404
 
 
-# ─── GET /api/multiagent/runs/{id}/messages ────────────────────────────────
+# ─── GET /api/v1/multiagent/runs/{id}/messages ────────────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_get_messages_missing_run_returns_404(auth, stub_session):
     async with _client() as client:
         resp = await client.get(
-            f"/api/multiagent/runs/{uuid.uuid4()}/messages", headers={"x-api-key": "test"}
+            f"/api/v1/multiagent/runs/{uuid.uuid4()}/messages", headers={"x-api-key": "test"}
         )
     assert resp.status_code == 404
 
@@ -202,6 +200,6 @@ async def test_get_messages_missing_run_returns_404(auth, stub_session):
 async def test_get_messages_invalid_uuid_422(auth, stub_session):
     async with _client() as client:
         resp = await client.get(
-            "/api/multiagent/runs/abc/messages", headers={"x-api-key": "test"}
+            "/api/v1/multiagent/runs/abc/messages", headers={"x-api-key": "test"}
         )
     assert resp.status_code == 422

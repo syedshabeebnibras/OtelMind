@@ -48,6 +48,7 @@ PROTOCOLS = {
     "consensus": ConsensusProtocol,
 }
 
+
 # Build a small role pool. Each protocol picks a sensible subset.
 def _roles_for(protocol: str) -> list:
     if protocol == "debate":
