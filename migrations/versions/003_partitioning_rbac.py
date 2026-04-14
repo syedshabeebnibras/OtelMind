@@ -248,18 +248,13 @@ def upgrade() -> None:
         "DROP CONSTRAINT IF EXISTS remediation_actions_failure_id_fkey"
     )
     op.execute(
-        "ALTER TABLE remediation_actions "
-        "DROP CONSTRAINT IF EXISTS fk_remediation_failure_id"
+        "ALTER TABLE remediation_actions DROP CONSTRAINT IF EXISTS fk_remediation_failure_id"
     )
     # spans / token_counts reference traces.trace_id via FKs declared in
     # migration 001 under auto-generated names. Drop them defensively so
     # the rename can't fail on a lock. Safe no-op if already gone.
-    op.execute(
-        "ALTER TABLE spans DROP CONSTRAINT IF EXISTS spans_trace_id_fkey"
-    )
-    op.execute(
-        "ALTER TABLE token_counts DROP CONSTRAINT IF EXISTS token_counts_trace_id_fkey"
-    )
+    op.execute("ALTER TABLE spans DROP CONSTRAINT IF EXISTS spans_trace_id_fkey")
+    op.execute("ALTER TABLE token_counts DROP CONSTRAINT IF EXISTS token_counts_trace_id_fkey")
     op.execute(
         "ALTER TABLE failure_classifications "
         "DROP CONSTRAINT IF EXISTS failure_classifications_trace_id_fkey"
@@ -267,9 +262,7 @@ def upgrade() -> None:
     # tool_errors.span_id references spans.span_id (via the unique index)
     # — drop it so we can strip the unique constraint on spans_legacy.
     # tool_errors is not partitioned; we keep the column as a soft ref.
-    op.execute(
-        "ALTER TABLE tool_errors DROP CONSTRAINT IF EXISTS tool_errors_span_id_fkey"
-    )
+    op.execute("ALTER TABLE tool_errors DROP CONSTRAINT IF EXISTS tool_errors_span_id_fkey")
 
     # Rename idempotently — on a partial re-run the legacy copy may
     # already exist, in which case we leave it alone and assume the
@@ -328,14 +321,8 @@ def upgrade() -> None:
     # the partitioned replacement uses a non-unique index because a
     # partitioned table can't have a unique constraint that doesn't
     # include the partition key.
-    op.execute(
-        "ALTER TABLE traces_legacy "
-        "DROP CONSTRAINT IF EXISTS traces_trace_id_key"
-    )
-    op.execute(
-        "ALTER TABLE spans_legacy "
-        "DROP CONSTRAINT IF EXISTS spans_span_id_key"
-    )
+    op.execute("ALTER TABLE traces_legacy DROP CONSTRAINT IF EXISTS traces_trace_id_key")
+    op.execute("ALTER TABLE spans_legacy DROP CONSTRAINT IF EXISTS spans_span_id_key")
 
     # traces
     op.execute(

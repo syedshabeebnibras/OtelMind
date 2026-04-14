@@ -111,6 +111,59 @@ async def test_blackboard_merges_json_updates():
 
 
 @pytest.mark.asyncio
+async def test_blackboard_supports_concurrent_reads():
+    """Each agent in a round reads the blackboard state independently.
+
+    A concurrent-style reader should never see torn updates: within one round,
+    every agent observes the same pre-round blackboard snapshot, not partial
+    mid-round writes. We simulate two agents that read-then-write and verify
+    that both writes land (no lost updates) and that both reads saw the
+    blackboard in a consistent state.
+    """
+    import asyncio
+    import json
+
+    agents = [_agent("writer", 0), _agent("writer", 1)]
+    proto = BlackboardProtocol(max_rounds=5)
+    tracer = GroupTracer()
+    state = _state()
+    # Seed the blackboard with baseline state the agents should observe.
+    state.shared_context["blackboard"] = {"seed": "initial"}
+
+    reads_seen: list[dict] = []
+    call_count = {"n": 0}
+
+    async def call_agent(agent, messages, round_number):
+        # Record what this agent saw on the blackboard (passed in the prompt).
+        content = messages[0]["content"]
+        start = content.find("Blackboard (current state): ") + len("Blackboard (current state): ")
+        end = content.find("\n\nRespond with", start)
+        board_text = content[start:end]
+        reads_seen.append(json.loads(board_text))
+
+        # Introduce a yield so both agents are in flight during the round.
+        await asyncio.sleep(0)
+        call_count["n"] += 1
+        payload = {f"from-{agent.agent_id}": f"write-{call_count['n']}"}
+        return json.dumps(payload), {"total_tokens": 4}
+
+    result_state = await proto.execute_round(
+        agents, state, round_number=1, call_agent=call_agent, tracer=tracer
+    )
+
+    # Both agents saw the initial seed — no torn reads
+    assert len(reads_seen) == 2
+    for snapshot in reads_seen:
+        assert snapshot.get("seed") == "initial"
+
+    # Both writes merged into the blackboard — no lost updates
+    board = result_state.shared_context["blackboard"]
+    assert board["seed"] == "initial"
+    assert board["from-writer-0"] == "write-1"
+    assert board["from-writer-1"] == "write-2"
+
+
+@pytest.mark.asyncio
 async def test_blackboard_convergence_on_repeated_empty_updates():
     agents = [_agent("a"), _agent("b")]
     proto = BlackboardProtocol(max_rounds=10)

@@ -41,6 +41,7 @@ from sqlalchemy import desc, select
 
 from otelmind.config import settings
 from otelmind.db import get_session
+from otelmind.eval.batch_scorer import BatchScorer
 from otelmind.eval.judge import DIMENSIONS, JudgeResult, LLMJudge
 from otelmind.eval.meta_eval import MetaEvaluator
 from otelmind.eval.regression import EvalCase, run_regression
@@ -346,31 +347,71 @@ async def _persist_trace_scores(tenant_id: _uuid.UUID, trace_id: str, result: Ju
             )
 
 
+async def _persist_batch_scores(
+    tenant_id: _uuid.UUID, trace_id: str, dimensions: dict[str, dict[str, Any]]
+) -> None:
+    """Persist a BatchScorer per_case row (dimensions dict) as TraceScore rows."""
+    async with get_session() as session:
+        for dim, payload in dimensions.items():
+            session.add(
+                TraceScore(
+                    id=_uuid.uuid4(),
+                    tenant_id=tenant_id,
+                    trace_id=trace_id,
+                    dimension=dim,
+                    score=float(payload.get("score", 0.0)),
+                    raw_score=int(payload.get("raw_score", 3)),
+                    method=str(payload.get("method", "llm")),
+                    reason=str(payload.get("reason", "")),
+                )
+            )
+
+
 async def _autoscore_tenant(tenant: Tenant, judge: LLMJudge) -> int:
     batch = await _pick_unscored_traces(tenant, limit=settings.eval_autoscorer_batch_size)
     if not batch:
         return 0
 
-    # Apply sample rate. 0.1 means roughly every 10th trace gets scored.
     rate = max(0.0, min(1.0, settings.eval_autoscorer_sample_rate))
     sampled = [t for t in batch if random.random() < rate][: settings.eval_autoscorer_batch_size]
     if not sampled:
         return 0
 
-    # Score concurrently, capped by eval_batch_concurrency.
-    semaphore = asyncio.Semaphore(max(1, settings.eval_batch_concurrency))
-
-    async def _bounded_score(trace: Trace) -> tuple[Trace, JudgeResult | None]:
-        async with semaphore:
-            return trace, await _score_trace(trace, judge)
-
-    results = await asyncio.gather(*[_bounded_score(t) for t in sampled])
-
-    scored = 0
-    for trace, result in results:
-        if result is None:
+    # Resolve each sampled trace to an EvalCase. Traces without an answer
+    # are dropped; everything else goes to BatchScorer for parallel scoring.
+    resolved: list[tuple[Trace, EvalCase]] = []
+    for trace in sampled:
+        question, answer, context = await _load_question_answer(trace)
+        if not answer:
             continue
-        await _persist_trace_scores(tenant.id, trace.trace_id, result)
+        resolved.append(
+            (
+                trace,
+                EvalCase(
+                    id=str(trace.trace_id),
+                    question=question,
+                    expected="",
+                    actual=answer,
+                    context=context,
+                ),
+            )
+        )
+    if not resolved:
+        return 0
+
+    scorer = BatchScorer(judge=judge, concurrency=settings.eval_batch_concurrency)
+    cases = [c for _t, c in resolved]
+    result = await scorer.score_batch(cases, dimensions=list(DIMENSIONS))
+
+    traces_by_id = {case.id: trace for trace, case in resolved}
+    scored = 0
+    for row in result.per_case:
+        if row["error"] is not None:
+            continue
+        trace = traces_by_id.get(row["id"])
+        if trace is None or not row["dimensions"]:
+            continue
+        await _persist_batch_scores(tenant.id, trace.trace_id, row["dimensions"])
         scored += 1
     return scored
 
@@ -644,9 +685,7 @@ async def _run_meta_eval(
     resolved: list[EvalCase] = []
     for case in candidate:
         try:
-            result = await judge.score(
-                case.question, case.actual, case.context, list(DIMENSIONS)
-            )
+            result = await judge.score(case.question, case.actual, case.context, list(DIMENSIONS))
         except Exception as exc:
             logger.warning("meta-eval: judge re-score failed for {}: {}", case.id, exc)
             continue

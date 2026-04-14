@@ -105,19 +105,16 @@ def get_trace_summary(trace: list[dict[str, Any]]) -> dict[str, Any]:
     model: str | None = None
     for s in spans:
         candidate = (
-            s.get("model")
-            or s.get("llm_model")
-            or (s.get("attributes") or {}).get("llm.model")
+            s.get("model") or s.get("llm_model") or (s.get("attributes") or {}).get("llm.model")
         )
         if candidate:
             model = str(candidate)
             break
 
     costs = _get_model_costs(model)
-    cost_usd = (
-        (total_prompt / 1_000) * costs["input"]
-        + (total_completion / 1_000) * costs["output"]
-    )
+    cost_usd = (total_prompt / 1_000) * costs["input"] + (total_completion / 1_000) * costs[
+        "output"
+    ]
 
     # --- Bottlenecks ---
     bottleneck_threshold_ms = total_duration * BOTTLENECK_THRESHOLD

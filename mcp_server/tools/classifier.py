@@ -113,9 +113,7 @@ def _check_context_overflow(spans: list[dict[str, Any]]) -> dict[str, Any] | Non
 def _check_tool_misuse(spans: list[dict[str, Any]]) -> dict[str, Any] | None:
     error_spans = [s for s in spans if s.get("status_code") == "ERROR"]
     if len(error_spans) >= 2:
-        names = ", ".join(
-            _normalize_span(s).get("span_name", "?") for s in error_spans[:5]
-        )
+        names = ", ".join(_normalize_span(s).get("span_name", "?") for s in error_spans[:5])
         return {
             "failure_type": "tool_misuse",
             "confidence": min(len(error_spans) / 5.0, 1.0),
@@ -161,9 +159,7 @@ def _build_trace_summary_for_llm(trace: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-async def _classify_with_llm(
-    trace: list[dict[str, Any]], api_key: str
-) -> dict[str, Any] | None:
+async def _classify_with_llm(trace: list[dict[str, Any]], api_key: str) -> dict[str, Any] | None:
     try:
         import openai
     except ImportError:
