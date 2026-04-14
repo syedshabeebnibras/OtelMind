@@ -126,23 +126,41 @@ Be conservative — minor rephrasing or polite addition is NOT a correction.
 async def _detect_corrections_with_llm(
     messages: list[Any],
     judge: LLMJudge,
+    max_concurrent: int = 5,
 ) -> dict[str, dict[str, int]]:
     """Use an LLM judge to count corrections between consecutive cross-agent messages.
 
-    Returns {agent_id: {"corrections_made": int, "corrections_received": int}}.
-    Falls back to an empty result on any failure (caller decides what to do).
+    Cross-agent message pairs are scored in parallel, capped at `max_concurrent`
+    in-flight OpenAI calls. For a 50-message group this turns a ~minute-long
+    sequential walk into a few seconds. Returns
+    {agent_id: {"corrections_made": int, "corrections_received": int}}.
     """
+    import asyncio
     import json
 
     if len(messages) < 2:
         return {}
 
-    counts: dict[str, dict[str, int]] = {}
+    pairs: list[tuple[Any, Any]] = []
     for i in range(1, len(messages)):
-        prev = messages[i - 1]
-        curr = messages[i]
-        if prev.sender_id == curr.sender_id:
-            continue
+        if messages[i - 1].sender_id != messages[i].sender_id:
+            pairs.append((messages[i - 1], messages[i]))
+    if not pairs:
+        return {}
+
+    sem = asyncio.Semaphore(max(1, max_concurrent))
+    counts: dict[str, dict[str, int]] = {}
+    counts_lock = asyncio.Lock()
+
+    try:
+        import openai
+    except ImportError:
+        logger.warning("evaluate_group: openai not installed, skipping LLM corrections")
+        return {}
+
+    client = openai.AsyncOpenAI(api_key=judge._api_key, timeout=30.0)
+
+    async def _check_pair(prev: Any, curr: Any) -> None:
         prompt = _CORRECTION_DETECT_PROMPT.format(
             sender_a=prev.sender_id,
             role_a=prev.sender_role,
@@ -151,33 +169,28 @@ async def _detect_corrections_with_llm(
             role_b=curr.sender_role,
             content_b=(curr.content or "")[:1500],
         )
-        try:
-            # Reuse the judge's underlying client by sending a single-question
-            # scoring request. We hijack the score() interface — score() returns
-            # a JudgeResult with a `reason` we don't actually use; instead we
-            # inspect the LLM's raw answer via a dimension whose prompt we control.
-            # Cleaner: call the OpenAI client directly through the judge's API key.
-            import openai
+        async with sem:
+            try:
+                resp = await client.chat.completions.create(
+                    model=judge._model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=80,
+                    response_format={"type": "json_object"},
+                )
+                data = json.loads(resp.choices[0].message.content or "{}")
+            except Exception as exc:
+                logger.warning("evaluate_group: LLM correction check failed: {}", exc)
+                return
+        if not data.get("correction"):
+            return
+        async with counts_lock:
+            counts.setdefault(curr.sender_id, {"corrections_made": 0, "corrections_received": 0})
+            counts.setdefault(prev.sender_id, {"corrections_made": 0, "corrections_received": 0})
+            counts[curr.sender_id]["corrections_made"] += 1
+            counts[prev.sender_id]["corrections_received"] += 1
 
-            client = openai.AsyncOpenAI(api_key=judge._api_key, timeout=30.0)
-            resp = await client.chat.completions.create(
-                model=judge._model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
-                max_tokens=80,
-                response_format={"type": "json_object"},
-            )
-            data = json.loads(resp.choices[0].message.content or "{}")
-            if not data.get("correction"):
-                continue
-        except Exception as exc:
-            logger.warning("evaluate_group: LLM correction check failed: {}", exc)
-            continue
-
-        counts.setdefault(curr.sender_id, {"corrections_made": 0, "corrections_received": 0})
-        counts.setdefault(prev.sender_id, {"corrections_made": 0, "corrections_received": 0})
-        counts[curr.sender_id]["corrections_made"] += 1
-        counts[prev.sender_id]["corrections_received"] += 1
+    await asyncio.gather(*[_check_pair(p, c) for p, c in pairs])
     return counts
 
 
