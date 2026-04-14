@@ -3,6 +3,7 @@
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
+import { InteractionGraph } from "@/components/InteractionGraph";
 import { useGroupRun } from "@/hooks/use-traces";
 import {
   Card,
@@ -183,6 +184,22 @@ export default function GroupRunDetailPage({
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Interaction graph</CardTitle>
+          <CardDescription>
+            Sequence-diagram view: who talked to whom, in what round, and where
+            corrections happened
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <InteractionGraph
+            messages={messages as Parameters<typeof InteractionGraph>[0]["messages"]}
+            perAgentStats={perAgent}
+          />
         </CardContent>
       </Card>
 

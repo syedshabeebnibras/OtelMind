@@ -22,7 +22,6 @@ from sqlalchemy import desc, func, select
 
 from otelmind.api.auth import CurrentTenant, require_scope
 from otelmind.api.rate_limit import enforce_tenant_rate_limit
-from otelmind.storage.models import Tenant as TenantModel
 from otelmind.api.schemas import (
     GroupMessageResponse,
     GroupRunCreate,
@@ -43,6 +42,7 @@ from otelmind.multiagent.protocols import (
 )
 from otelmind.multiagent.roles import AgentRole
 from otelmind.storage.models import GroupMessage, GroupRun
+from otelmind.storage.models import Tenant as TenantModel
 
 router = APIRouter(prefix="/multiagent", tags=["multiagent"])
 
@@ -85,8 +85,7 @@ async def _check_multiagent_rate_limit(tenant: TenantModel) -> None:
         raise HTTPException(
             status_code=429,
             detail=(
-                f"Multi-agent rate limit exceeded: "
-                f"{limit} runs/hour on the '{tenant.plan}' plan"
+                f"Multi-agent rate limit exceeded: {limit} runs/hour on the '{tenant.plan}' plan"
             ),
         )
 

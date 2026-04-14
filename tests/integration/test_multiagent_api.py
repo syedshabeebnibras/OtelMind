@@ -232,9 +232,7 @@ async def test_multiagent_rate_limit_blocks_when_quota_exceeded(
 
 
 @pytest.mark.asyncio
-async def test_multiagent_rate_limit_allows_when_under_quota(
-    auth, stub_session, stub_background
-):
+async def test_multiagent_rate_limit_allows_when_under_quota(auth, stub_session, stub_background):
     auth.plan = "pro"  # pro plan = 50 runs/hour
     stub_session.scalar = AsyncMock(return_value=10)  # well under
 
