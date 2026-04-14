@@ -1,0 +1,296 @@
+# Human-labeled gold set for judge calibration.
+#
+# Each case has a question, the expected answer, an `actual` candidate
+# response, optional grounding `context`, and `human_scores` on the
+# 1-5 scale dimension that the LLM judge uses internally.
+#
+# Distribution intent (25 cases total):
+#   - 8 strong cases  (overall ~4-5 across the board)
+#   - 8 clear failures (one or more dimensions in the 1-2 range)
+#   - 9 borderline    (mixed 2-3-4 — these are what discriminate good
+#                     judges from rubber-stamp judges)
+#
+# Used by: otelmind.eval.calibration.calibrate_judge() and the
+# `calibrate_judge` MCP tool / `POST /api/calibrations` endpoint.
+
+cases:
+  # ─── Strong: faithful, relevant, coherent answers ──────────────────
+
+  - id: "hl-001"
+    question: "What is the capital of France?"
+    expected: "Paris"
+    actual: "The capital of France is Paris."
+    context: "France is a country in Western Europe. Its capital is Paris."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  - id: "hl-002"
+    question: "Explain how a HashMap handles collisions."
+    expected: "Open addressing or chaining: chaining stores colliding entries in a per-bucket linked list; open addressing probes other buckets according to a strategy."
+    actual: "When two keys hash to the same bucket the HashMap resolves it either by chaining (a linked list per bucket) or by open addressing (probing the next empty slot). Java's HashMap uses chaining with a tree fallback once a bucket grows past 8 entries."
+    context: "HashMap collision resolution strategies include separate chaining and open addressing. Java's HashMap uses chaining."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  - id: "hl-003"
+    question: "What does the Python `with` statement do?"
+    expected: "Sets up a context manager that guarantees __enter__ before the block and __exit__ after, even if exceptions occur."
+    actual: "`with` enters a context manager: it calls __enter__ before the block runs and __exit__ when the block ends, including on exceptions. This is how `with open(...)` guarantees the file is closed."
+    context: "Python's `with` statement is syntactic sugar for try/finally that ensures __exit__ is called."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  - id: "hl-004"
+    question: "List three differences between TCP and UDP."
+    expected: "TCP is connection-oriented, reliable (ACKs + retransmits), and ordered. UDP is connectionless, unreliable, and unordered."
+    actual: "1. TCP is connection-oriented (3-way handshake); UDP is connectionless. 2. TCP guarantees in-order, reliable delivery via ACKs and retransmission; UDP does not. 3. TCP has flow and congestion control; UDP does not."
+    context: "TCP provides reliable, ordered delivery using handshakes and acknowledgements. UDP is connectionless and offers no delivery guarantees."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  - id: "hl-005"
+    question: "What is the time complexity of binary search on a sorted array?"
+    expected: "O(log n)"
+    actual: "O(log n) — each step halves the search space."
+    context: "Binary search runs in O(log n) on a sorted array."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  - id: "hl-006"
+    question: "Why use a connection pool for a Postgres backend?"
+    expected: "Avoid the per-request cost of TCP setup, TLS handshake, and Postgres process forking. Reuse warm connections under load."
+    actual: "Opening a Postgres connection is expensive — TCP, TLS, and a per-connection backend process on the server. A pool keeps a warm set of connections so requests get one instantly instead of paying that startup cost every time. It also caps concurrency so the database isn't overloaded."
+    context: "PostgreSQL forks a backend process per connection. Connection pools reuse connections to avoid this overhead."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  - id: "hl-007"
+    question: "What is HTTP status code 429?"
+    expected: "Too Many Requests — rate limit exceeded."
+    actual: "429 Too Many Requests. The client has hit a rate limit and should back off, ideally honouring the Retry-After header if present."
+    context: "HTTP 429 indicates the client has sent too many requests in a given time."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  - id: "hl-008"
+    question: "Define idempotency in the context of HTTP."
+    expected: "Multiple identical requests have the same effect as a single one. GET, PUT, DELETE are idempotent; POST is not."
+    actual: "An idempotent HTTP method produces the same server state regardless of how many times it's called with the same input. GET, PUT, DELETE, and HEAD are idempotent; POST and PATCH typically are not."
+    context: "HTTP idempotency means repeating the request has no additional effect on the server beyond the first request."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  # ─── Clear failures: hallucination, wrong topic, incoherent ────────
+
+  - id: "hl-009"
+    question: "What is the capital of France?"
+    expected: "Paris"
+    actual: "The capital of France is Berlin, which is famous for the Eiffel Tower."
+    context: "France is a country in Western Europe. Its capital is Paris."
+    human_scores:
+      faithfulness: 1
+      relevance: 3
+      coherence: 4
+      safety: 5
+
+  - id: "hl-010"
+    question: "How do I list files in a directory in Python?"
+    expected: "Use os.listdir(path) or pathlib.Path(path).iterdir()."
+    actual: "I love rainy weather. Rainy days make me want to drink hot chocolate and read mystery novels."
+    context: "Python's standard library exposes os.listdir and pathlib.Path.iterdir."
+    human_scores:
+      faithfulness: 1
+      relevance: 1
+      coherence: 4
+      safety: 5
+
+  - id: "hl-011"
+    question: "What does the SQL JOIN keyword do?"
+    expected: "Combines rows from two or more tables based on a related column."
+    actual: "JOIN crash banana the elephant velocity. PostgreSQL the and the. Every other dragon."
+    context: "SQL JOIN combines rows from related tables."
+    human_scores:
+      faithfulness: 1
+      relevance: 1
+      coherence: 1
+      safety: 5
+
+  - id: "hl-012"
+    question: "Explain the term 'closure' in JavaScript."
+    expected: "A function that captures variables from its enclosing lexical scope, retaining access to them even after that scope has exited."
+    actual: "A closure in JavaScript is when you close the browser tab and the page disappears. This frees memory and stops execution. Use it for performance."
+    context: "A closure is a function that retains access to variables from the scope in which it was defined."
+    human_scores:
+      faithfulness: 1
+      relevance: 2
+      coherence: 4
+      safety: 5
+
+  - id: "hl-013"
+    question: "What is the difference between a linked list and an array?"
+    expected: "Arrays use contiguous memory and offer O(1) random access. Linked lists use scattered nodes with pointers; insert/delete at known nodes is O(1) but random access is O(n)."
+    actual: "Linked lists are written in C and arrays are written in Python. That's why arrays are slower."
+    context: "Arrays store elements contiguously; linked lists chain nodes via pointers."
+    human_scores:
+      faithfulness: 1
+      relevance: 2
+      coherence: 3
+      safety: 5
+
+  - id: "hl-014"
+    question: "Summarize the second law of thermodynamics."
+    expected: "The total entropy of an isolated system can never decrease over time; it stays constant for reversible processes and increases for irreversible ones."
+    actual: "The first law of thermodynamics says energy is conserved."
+    context: "The second law of thermodynamics states that entropy of an isolated system tends to increase."
+    human_scores:
+      faithfulness: 1
+      relevance: 1
+      coherence: 5
+      safety: 5
+
+  - id: "hl-015"
+    question: "What is OAuth 2.0?"
+    expected: "An authorization framework where a resource owner delegates limited access to a third-party client via an access token, without sharing credentials."
+    actual: "OAuth 2.0 is a database engine for storing user passwords. You install it with `apt install oauth2`."
+    context: "OAuth 2.0 is an authorization framework that issues access tokens to third-party apps without sharing the user's credentials."
+    human_scores:
+      faithfulness: 1
+      relevance: 2
+      coherence: 4
+      safety: 4
+
+  - id: "hl-016"
+    question: "How does garbage collection work in CPython?"
+    expected: "Reference counting frees objects immediately when their count hits zero. A cyclic-collector handles reference cycles."
+    actual: "CPython uses a stop-the-world generational mark-and-sweep collector identical to the JVM's G1, and supports manual `delete` like C++."
+    context: "CPython primarily uses reference counting plus a separate cyclic garbage collector for cycles."
+    human_scores:
+      faithfulness: 1
+      relevance: 4
+      coherence: 4
+      safety: 5
+
+  # ─── Borderline: partially correct, vague, or ambiguous ────────────
+
+  - id: "hl-017"
+    question: "Explain dependency injection."
+    expected: "A pattern where an object's collaborators are supplied externally rather than constructed internally — usually via constructor, setter, or method parameter."
+    actual: "Dependency injection is when you pass things into a function instead of having the function create them itself. It makes testing easier."
+    context: "Dependency injection is a design pattern where dependencies are provided to an object rather than created by it, improving testability and modularity."
+    human_scores:
+      faithfulness: 4
+      relevance: 5
+      coherence: 4
+      safety: 5
+
+  - id: "hl-018"
+    question: "What is a database index?"
+    expected: "An auxiliary data structure (commonly B-tree or hash) that speeds up lookups on indexed columns at the cost of additional storage and slower writes."
+    actual: "An index makes queries faster."
+    context: "A database index is a data structure that improves the speed of data retrieval at the cost of additional writes and storage space."
+    human_scores:
+      faithfulness: 4
+      relevance: 4
+      coherence: 5
+      safety: 5
+
+  - id: "hl-019"
+    question: "Compare REST and GraphQL."
+    expected: "REST exposes resource-oriented endpoints with fixed shapes; GraphQL exposes a single endpoint where clients query exactly the fields they want. REST has better cacheability; GraphQL avoids over-/under-fetching."
+    actual: "REST has many endpoints, GraphQL has one. GraphQL is newer."
+    context: "REST is resource-based with multiple endpoints. GraphQL exposes a single endpoint with a typed query language."
+    human_scores:
+      faithfulness: 3
+      relevance: 4
+      coherence: 4
+      safety: 5
+
+  - id: "hl-020"
+    question: "What is the CAP theorem?"
+    expected: "A distributed system can guarantee at most two of: Consistency, Availability, Partition tolerance. Under a partition you must trade C for A or vice versa."
+    actual: "CAP theorem says you can't have consistency and availability at the same time, ever."
+    context: "The CAP theorem states that during a network partition, a distributed system must choose between consistency and availability."
+    human_scores:
+      faithfulness: 2
+      relevance: 4
+      coherence: 4
+      safety: 5
+
+  - id: "hl-021"
+    question: "How do I exit Vim?"
+    expected: "Press Esc, then type :q to quit, :q! to discard changes, or :wq to save and quit."
+    actual: "Press the escape key and type colon q."
+    context: "In Vim, Esc enters normal mode; :q quits, :q! quits without saving, :wq saves and quits."
+    human_scores:
+      faithfulness: 4
+      relevance: 4
+      coherence: 4
+      safety: 5
+
+  - id: "hl-022"
+    question: "What does `git rebase` do?"
+    expected: "Replays a sequence of commits from one branch onto the tip of another, producing a linear history. Rewrites commit hashes."
+    actual: "It moves commits to a different branch."
+    context: "git rebase reapplies commits on top of another base, rewriting history to produce a linear log."
+    human_scores:
+      faithfulness: 3
+      relevance: 4
+      coherence: 4
+      safety: 5
+
+  - id: "hl-023"
+    question: "What is the difference between == and === in JavaScript?"
+    expected: "== performs type coercion before comparing; === compares without coercion (strict equality)."
+    actual: "=== is just like == but with three equals signs, which makes it more strict somehow."
+    context: "JavaScript == coerces operands to the same type before comparison. === requires both type and value to match."
+    human_scores:
+      faithfulness: 3
+      relevance: 4
+      coherence: 3
+      safety: 5
+
+  - id: "hl-024"
+    question: "Describe the SOLID principles."
+    expected: "Single-responsibility, Open/closed, Liskov substitution, Interface segregation, Dependency inversion — five OO design principles."
+    actual: "SOLID stands for Single-responsibility, Open/closed, and three others I don't recall exactly."
+    context: "SOLID is an acronym for five OO design principles: Single-responsibility, Open/closed, Liskov substitution, Interface segregation, Dependency inversion."
+    human_scores:
+      faithfulness: 3
+      relevance: 4
+      coherence: 4
+      safety: 5
+
+  - id: "hl-025"
+    question: "What is a memory-mapped file?"
+    expected: "A region of process address space that maps directly to file contents on disk, so reads and writes go through the page cache. Useful for large files where you want OS-managed paging."
+    actual: "It's a way to read files. Faster than open()."
+    context: "Memory-mapped files map file contents into the process's address space via mmap(), letting the OS handle paging and caching."
+    human_scores:
+      faithfulness: 3
+      relevance: 4
+      coherence: 4
+      safety: 5
