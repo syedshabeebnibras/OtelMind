@@ -60,7 +60,7 @@ def stub_session(monkeypatch):
 
 @pytest.fixture
 def auth(monkeypatch):
-    tenant = MagicMock(id=uuid.uuid4(), slug="t", is_active=True, name="t")
+    tenant = MagicMock(id=uuid.uuid4(), slug="t", is_active=True, name="t", plan="enterprise")
     fake_api_key = MagicMock(scopes=["admin"], id=uuid.uuid4())
     override = make_auth_override(tenant, fake_api_key)
     app.dependency_overrides[require_api_key] = override
@@ -203,6 +203,73 @@ async def test_get_messages_invalid_uuid_422(auth, stub_session):
             "/api/v1/multiagent/runs/abc/messages", headers={"x-api-key": "test"}
         )
     assert resp.status_code == 422
+
+
+# ─── Per-tenant multi-agent hourly rate limit ──────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_multiagent_rate_limit_blocks_when_quota_exceeded(
+    auth, stub_session, stub_background, monkeypatch
+):
+    """Once the hourly count meets the plan limit, POST returns 429."""
+    auth.plan = "free"  # free plan = 5 runs/hour
+    stub_session.scalar = AsyncMock(return_value=5)  # already at quota
+
+    body = {
+        "problem": "x",
+        "roles": [{"name": "a", "system_prompt": "p"}],
+        "protocol": "round_robin",
+        "max_rounds": 1,
+    }
+    async with _client() as client:
+        resp = await client.post(
+            "/api/v1/multiagent/runs", json=body, headers={"x-api-key": "test"}
+        )
+    assert resp.status_code == 429, resp.text
+    assert "rate limit" in resp.text.lower()
+    assert len(stub_background) == 0  # no background task spawned
+
+
+@pytest.mark.asyncio
+async def test_multiagent_rate_limit_allows_when_under_quota(
+    auth, stub_session, stub_background
+):
+    auth.plan = "pro"  # pro plan = 50 runs/hour
+    stub_session.scalar = AsyncMock(return_value=10)  # well under
+
+    body = {
+        "problem": "x",
+        "roles": [{"name": "a", "system_prompt": "p"}],
+        "protocol": "round_robin",
+        "max_rounds": 1,
+    }
+    async with _client() as client:
+        resp = await client.post(
+            "/api/v1/multiagent/runs", json=body, headers={"x-api-key": "test"}
+        )
+    assert resp.status_code == 202
+
+
+@pytest.mark.asyncio
+async def test_multiagent_rate_limit_unknown_plan_falls_back_to_free(
+    auth, stub_session, stub_background
+):
+    """Unrecognised plan name → uses the strictest (free) limit."""
+    auth.plan = "mystery_tier"
+    stub_session.scalar = AsyncMock(return_value=5)  # = free quota
+
+    body = {
+        "problem": "x",
+        "roles": [{"name": "a", "system_prompt": "p"}],
+        "protocol": "round_robin",
+        "max_rounds": 1,
+    }
+    async with _client() as client:
+        resp = await client.post(
+            "/api/v1/multiagent/runs", json=body, headers={"x-api-key": "test"}
+        )
+    assert resp.status_code == 429
 
 
 # ─── Startup recovery for stuck group runs ─────────────────────────────────

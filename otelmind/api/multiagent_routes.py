@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid as _uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -22,6 +22,7 @@ from sqlalchemy import desc, func, select
 
 from otelmind.api.auth import CurrentTenant, require_scope
 from otelmind.api.rate_limit import enforce_tenant_rate_limit
+from otelmind.storage.models import Tenant as TenantModel
 from otelmind.api.schemas import (
     GroupMessageResponse,
     GroupRunCreate,
@@ -52,6 +53,42 @@ _PROTOCOL_MAP: dict[str, type] = {
     "consensus": ConsensusProtocol,
     "delegation": DelegationProtocol,
 }
+
+# Per-tenant hourly budget on multi-agent runs. Each run can spend several
+# cents in real Anthropic credits, so this is intentionally tighter than
+# the generic /api/v1 read/ingest buckets in rate_limit.py.
+_MULTIAGENT_HOURLY_LIMITS: dict[str, int] = {
+    "free": 5,
+    "pro": 50,
+    "enterprise": 500,
+}
+
+
+async def _check_multiagent_rate_limit(tenant: TenantModel) -> None:
+    """Enforce per-tenant hourly limit on multi-agent runs.
+
+    Counts every GroupRun this tenant has created in the last hour
+    (regardless of status — a failed run still cost API spend). Raises
+    HTTP 429 when the count meets or exceeds the limit for the tenant's
+    plan. Unknown plans default to the `free` limit.
+    """
+    cutoff = datetime.now(UTC) - timedelta(hours=1)
+    async with get_session() as session:
+        count = await session.scalar(
+            select(func.count(GroupRun.id)).where(
+                GroupRun.tenant_id == tenant.id,
+                GroupRun.created_at >= cutoff,
+            )
+        )
+    limit = _MULTIAGENT_HOURLY_LIMITS.get(tenant.plan, _MULTIAGENT_HOURLY_LIMITS["free"])
+    if (count or 0) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Multi-agent rate limit exceeded: "
+                f"{limit} runs/hour on the '{tenant.plan}' plan"
+            ),
+        )
 
 
 def _role_from_dict(spec: dict[str, Any]) -> AgentRole:
@@ -145,6 +182,8 @@ async def create_group_run(
     """Spawn a multi-agent group asynchronously. Returns the run record immediately."""
     # Bucket = Literal["ingest", "read"] — POST counts against the ingest budget
     await enforce_tenant_rate_limit(request, tenant, "ingest")
+    # Tighter per-tenant cap on multi-agent runs (real LLM spend per call)
+    await _check_multiagent_rate_limit(tenant)
 
     if not body.roles:
         raise HTTPException(status_code=422, detail="at least one role is required")
