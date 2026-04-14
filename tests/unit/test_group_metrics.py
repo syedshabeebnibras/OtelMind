@@ -161,6 +161,62 @@ async def test_evaluate_group_uses_llm_correction_detector_when_judge_has_key(mo
 
 
 @pytest.mark.asyncio
+async def test_detect_corrections_with_llm_respects_max_concurrent():
+    """The semaphore must cap concurrent OpenAI calls at max_concurrent."""
+    import asyncio
+
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from otelmind.eval.group_metrics import _detect_corrections_with_llm
+
+    # 8 cross-agent message pairs (alternating senders)
+    msgs = []
+    for i in range(9):
+        msgs.append(_msg(f"a-{i % 2}", "coder" if i % 2 == 0 else "reviewer", "x" * 80, 100))
+
+    judge = MagicMock()
+    judge._api_key = "fake-key"
+    judge._model = "gpt-4o"
+
+    in_flight = 0
+    peak = 0
+    lock = asyncio.Lock()
+
+    async def slow_create(**kwargs):
+        nonlocal in_flight, peak
+        async with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+        await asyncio.sleep(0.02)
+        async with lock:
+            in_flight -= 1
+        # Return shape openai.AsyncOpenAI().chat.completions.create returns
+        choice = MagicMock()
+        choice.message.content = '{"correction": false}'
+        resp = MagicMock(choices=[choice])
+        return resp
+
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = AsyncMock(side_effect=slow_create)
+    with patch("openai.AsyncOpenAI", return_value=fake_client):
+        result = await _detect_corrections_with_llm(msgs, judge, max_concurrent=3)
+
+    assert peak <= 3, f"semaphore breach: peak={peak}"
+    assert peak >= 2, "concurrency should kick in for 8 pairs"
+    assert result == {}  # all stub responses say correction=false
+
+
+@pytest.mark.asyncio
+async def test_detect_corrections_with_llm_handles_empty_message_list():
+    from otelmind.eval.group_metrics import _detect_corrections_with_llm
+
+    judge = type("J", (), {"_api_key": "fake", "_model": "gpt-4o"})()
+    assert await _detect_corrections_with_llm([], judge) == {}
+    # Single message — no pairs
+    assert await _detect_corrections_with_llm([_msg("a", "r", "x" * 80, 50)], judge) == {}
+
+
+@pytest.mark.asyncio
 async def test_evaluate_group_falls_back_to_regex_when_no_judge_key():
     """No judge key => regex detector path."""
     messages = [
