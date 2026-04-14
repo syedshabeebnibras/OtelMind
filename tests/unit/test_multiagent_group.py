@@ -93,6 +93,7 @@ async def test_group_protocol_failure_marks_state_failed():
 
 
 def test_group_ensure_client_requires_api_key(monkeypatch):
+    pytest.importorskip("anthropic")  # skip when SDK isn't installed
     from otelmind.multiagent import group as group_module
 
     monkeypatch.setattr(group_module.settings, "anthropic_api_key", "")

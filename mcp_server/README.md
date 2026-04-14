@@ -4,8 +4,9 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that e
 **OtelMind's AI agent failure detection and evaluation** capabilities as tools that
 Claude (or any MCP client) can call directly.
 
-All four tools work **without an API key** using heuristic rules. Setting
-`OPENAI_API_KEY` unlocks GPT-4o-powered semantic analysis.
+All six tools work **without an API key** using heuristic rules. Setting
+`OPENAI_API_KEY` unlocks GPT-4o-powered semantic analysis;
+`ANTHROPIC_API_KEY` enables the multi-agent group orchestrator.
 
 ---
 
@@ -17,6 +18,17 @@ All four tools work **without an API key** using heuristic rules. Setting
 | `check_hallucination` | Check if an LLM output is grounded in source context | No (keyword overlap) / Optional (GPT-4o) |
 | `run_eval_benchmark` | Score test cases: accuracy, faithfulness, relevance | No (accuracy only) / Optional (all) |
 | `get_trace_summary` | Duration, tokens, cost, bottlenecks, timeline | Never |
+| `run_multiagent_eval` | Spawn a multi-agent group, run a protocol, score collaboration | Yes (`ANTHROPIC_API_KEY`) |
+| `calibrate_judge` | Score human-labeled cases and report Cohen's kappa, bias, calibration curve | Optional (LLM scoring); heuristic without |
+
+---
+
+## Required environment variables
+
+| Variable | Used by | Required? |
+|----------|---------|-----------|
+| `OPENAI_API_KEY` | `classify_agent_failure` (LLM mode), `check_hallucination` (LLM mode), `run_eval_benchmark` (LLM metrics), `calibrate_judge` (LLM scoring) | Optional — heuristics run without it |
+| `ANTHROPIC_API_KEY` | `run_multiagent_eval` (real Claude calls) | **Required** for multi-agent — the tool errors clearly if unset |
 
 ---
 
@@ -368,6 +380,109 @@ Summarise an agent trace: duration, tokens, cost, bottlenecks, and timeline.
 
 ---
 
+### `run_multiagent_eval`
+
+Spawn a multi-agent group, run them through a communication protocol, and score
+their collaboration. Requires `ANTHROPIC_API_KEY` for the real Claude calls.
+
+**Input:**
+```json
+{
+  "problem": "Find and fix the bug in this Python function: def avg(xs): return sum(xs) / len(xs)",
+  "roles": [
+    {"name": "coder", "system_prompt": "You are a senior Python engineer. Be concise."},
+    {"name": "reviewer", "system_prompt": "Review code for bugs, edge cases, and clarity."}
+  ],
+  "protocol": "round_robin",
+  "max_rounds": 2,
+  "expected_output": "Handle the empty list case (ZeroDivisionError)."
+}
+```
+
+`protocol` is one of: `round_robin`, `debate` (3 agents required), `blackboard`,
+`consensus`, `delegation`. `expected_output` is optional and only used when
+scoring task completion via the LLM judge.
+
+**Output:**
+```json
+{
+  "result": {
+    "problem": "...",
+    "protocol": "RoundRobinProtocol",
+    "status": "completed",
+    "rounds_completed": 2,
+    "total_tokens": 1240,
+    "final_output": "Add `if not xs: return 0.0` at the top of avg().",
+    "messages": [
+      {"sender_role": "coder", "round_number": 1, "content": "...", "token_usage": {"total_tokens": 410}}
+    ],
+    "roles": [{"name": "coder", "model": "claude-sonnet-4-20250514"}]
+  },
+  "metrics": {
+    "task_completion_score": 0.85,
+    "convergence_rate": 0.5,
+    "communication_efficiency": 1.0,
+    "error_correction_count": 1,
+    "dominance_score": 0.78,
+    "rounds_to_completion": 2,
+    "total_tokens": 1240,
+    "total_cost_usd": 0.0142,
+    "per_agent_stats": {
+      "coder-0":    {"messages_sent": 2, "tokens_used": 620, "contribution_ratio": 0.5}
+    }
+  }
+}
+```
+
+---
+
+### `calibrate_judge`
+
+Score human-labeled cases with the LLM judge and report inter-rater agreement.
+Useful for verifying the judge tracks human intuition before trusting its
+auto-scores.
+
+**Input:**
+```json
+{
+  "test_cases": [
+    {"id": "c1", "question": "What is the capital of France?", "actual": "Paris.", "context": "France's capital is Paris."}
+  ],
+  "human_labels": [
+    {"case_id": "c1", "dimension": "faithfulness", "score": 1.0}
+  ],
+  "dimensions": ["faithfulness"]
+}
+```
+
+`human_labels[*].score` is normalised 0–1. Optional `dimensions` filters which
+judge dimensions to evaluate; defaults to whichever dimensions appear in
+`human_labels`.
+
+**Output:**
+```json
+{
+  "cohens_kappa": 0.82,
+  "agreement_rate": 0.88,
+  "bias": 0.04,
+  "case_count": 25,
+  "judge_model": "gpt-4o",
+  "confusion_matrix": {"5-5": 8, "4-5": 1, "4-4": 6},
+  "per_dimension": {
+    "faithfulness": {"cohens_kappa": 0.85, "agreement_rate": 0.92, "mean_absolute_error": 0.12, "bias": 0.02, "n": 25}
+  },
+  "calibration_curve": [
+    {"bin": 5, "predicted": 0.95, "actual": 0.91, "n": 9}
+  ]
+}
+```
+
+`bias` is `mean(judge) - mean(human)`; positive means the judge is too
+generous. The `calibration_curve` is the predicted-bin → actual-mean curve
+suitable for reliability diagrams.
+
+---
+
 ## Span format reference
 
 The trace tools accept a flexible span format. Supported fields:
@@ -395,16 +510,21 @@ All fields are optional except `span_name`/`name`.
 
 ```
 mcp_server/
-├── server.py              # FastMCP server entry point
+├── server.py              # FastMCP server entry point — registers all 6 tools
 ├── tools/
 │   ├── classifier.py      # classify_agent_failure implementation
 │   ├── hallucination.py   # check_hallucination implementation
 │   ├── eval_runner.py     # run_eval_benchmark implementation
-│   └── trace_summary.py   # get_trace_summary implementation
+│   ├── trace_summary.py   # get_trace_summary implementation
+│   ├── multiagent.py      # run_multiagent_eval — wraps otelmind.multiagent
+│   └── calibration.py     # calibrate_judge — wraps otelmind.eval.calibration
 ├── pyproject.toml
 ├── README.md
 └── .gitignore
 ```
 
-The tools are intentionally self-contained and do not import from the parent
-`otelmind` package, so the MCP server can be installed and run independently.
+`classifier`, `hallucination`, `eval_runner`, and `trace_summary` are
+self-contained and don't import from the parent `otelmind` package.
+`multiagent` and `calibration` do — they reuse the production
+`AgentGroup`, judge, and calibration code rather than reimplementing them,
+so behaviour stays in sync with the rest of the stack.
