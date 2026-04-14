@@ -80,6 +80,18 @@ async def calibrate_judge(
     dimensions: list[str] | None = None,
 ) -> CalibrationResult:
     """Score cases with the judge, compare to human labels, report agreement."""
+    from otelmind.internal_tracing import trace_calibration
+
+    with trace_calibration(case_count=len(cases)):
+        return await _calibrate_judge_inner(judge, cases, human_labels, dimensions)
+
+
+async def _calibrate_judge_inner(
+    judge: LLMJudge,
+    cases: list[EvalCase],
+    human_labels: list[HumanLabel],
+    dimensions: list[str] | None,
+) -> CalibrationResult:
     cases_by_id = {c.id: c for c in cases}
 
     labels_by_case: dict[str, dict[str, float]] = {}
