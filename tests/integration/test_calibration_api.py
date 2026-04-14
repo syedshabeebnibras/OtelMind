@@ -131,7 +131,7 @@ async def test_create_calibration_returns_summary(auth, stub_session):
     with patch.object(mod, "calibrate_judge", AsyncMock(return_value=_stub_calibration_result())):
         async with _client() as client:
             resp = await client.post(
-                "/api/v1/calibrations/", json=body, headers={"x-api-key": "test"}
+                "/api/v1/calibrations", json=body, headers={"x-api-key": "test"}
             )
     assert resp.status_code == 201, resp.text
     data = resp.json()
@@ -146,7 +146,7 @@ async def test_create_calibration_returns_summary(auth, stub_session):
 async def test_create_calibration_rejects_empty_cases(auth, stub_session):
     body = {"test_cases": [], "human_labels": [{"case_id": "x", "dimension": "y", "score": 0.5}]}
     async with _client() as client:
-        resp = await client.post("/api/v1/calibrations/", json=body, headers={"x-api-key": "test"})
+        resp = await client.post("/api/v1/calibrations", json=body, headers={"x-api-key": "test"})
     assert resp.status_code == 422
 
 
@@ -154,7 +154,7 @@ async def test_create_calibration_rejects_empty_cases(auth, stub_session):
 async def test_create_calibration_rejects_empty_labels(auth, stub_session):
     body = {"test_cases": [{"id": "c1", "question": "q", "actual": "a"}], "human_labels": []}
     async with _client() as client:
-        resp = await client.post("/api/v1/calibrations/", json=body, headers={"x-api-key": "test"})
+        resp = await client.post("/api/v1/calibrations", json=body, headers={"x-api-key": "test"})
     assert resp.status_code == 422
 
 
@@ -164,7 +164,7 @@ async def test_create_calibration_rejects_empty_labels(auth, stub_session):
 @pytest.mark.asyncio
 async def test_list_calibrations_empty(auth, stub_session):
     async with _client() as client:
-        resp = await client.get("/api/v1/calibrations/", headers={"x-api-key": "test"})
+        resp = await client.get("/api/v1/calibrations", headers={"x-api-key": "test"})
     assert resp.status_code == 200, resp.text
     assert resp.json() == {"items": [], "total": 0}
 
@@ -182,5 +182,5 @@ async def test_get_calibration_404(auth, stub_session):
 @pytest.mark.asyncio
 async def test_endpoints_require_auth(stub_session):
     async with _client() as client:
-        resp = await client.get("/api/v1/calibrations/")
+        resp = await client.get("/api/v1/calibrations")
     assert resp.status_code in (401, 403, 422)
