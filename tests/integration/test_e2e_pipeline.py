@@ -184,13 +184,16 @@ async def test_eval_run_scores_and_detects_regression(session, tenant):
 @pytest.mark.asyncio
 async def test_calibration_against_human_labels_persists_row(session, tenant):
     """Compute calibration for a stub judge, then persist + read back the row."""
-    cases_data = yaml.safe_load(
-        open("config/eval_datasets/human_labels.yaml")
-    )["cases"][:5]
+    with open("config/eval_datasets/human_labels.yaml") as fh:
+        cases_data = yaml.safe_load(fh)["cases"][:5]
 
     cases = [
         EvalCase(
-            id=c["id"], question=c["question"], expected=c["expected"], actual=c["actual"], context=c.get("context", "")
+            id=c["id"],
+            question=c["question"],
+            expected=c["expected"],
+            actual=c["actual"],
+            context=c.get("context", ""),
         )
         for c in cases_data
     ]
@@ -228,9 +231,7 @@ async def test_calibration_against_human_labels_persists_row(session, tenant):
     session.add(row)
     await session.flush()
 
-    fetched = await session.scalar(
-        select(JudgeCalibration).where(JudgeCalibration.id == row.id)
-    )
+    fetched = await session.scalar(select(JudgeCalibration).where(JudgeCalibration.id == row.id))
     assert fetched is not None
     assert fetched.cohens_kappa == pytest.approx(1.0)
     assert fetched.case_count == 5
@@ -275,7 +276,5 @@ async def test_tenant_scoping_isolates_failures(session, tenant):
 async def test_judge_calibrations_table_exists(engine):
     """Migration 007 ran — the judge_calibrations table is queryable."""
     async with engine.begin() as conn:
-        result = await conn.execute(
-            select(JudgeCalibration).limit(0)
-        )
+        result = await conn.execute(select(JudgeCalibration).limit(0))
     assert result is not None  # no exception = table exists

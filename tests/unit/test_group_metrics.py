@@ -164,7 +164,6 @@ async def test_evaluate_group_uses_llm_correction_detector_when_judge_has_key(mo
 async def test_detect_corrections_with_llm_respects_max_concurrent():
     """The semaphore must cap concurrent OpenAI calls at max_concurrent."""
     import asyncio
-
     from unittest.mock import AsyncMock, MagicMock, patch
 
     from otelmind.eval.group_metrics import _detect_corrections_with_llm
