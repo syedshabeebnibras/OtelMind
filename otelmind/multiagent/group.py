@@ -175,7 +175,12 @@ class AgentGroup:
         total_tokens = sum(a.tokens_used for a in agents)
 
         if state.status == "in_progress":
-            state.status = "deadlocked" if state.round_number >= self._max_rounds else "completed"
+            # Protocols that detect deadlock/convergence mark the status themselves
+            # (ConsensusProtocol on a no-majority round, DebateProtocol on a VERDICT,
+            # BlackboardProtocol on repeated empty streaks). Reaching this branch
+            # means the protocol ran every round without declaring a terminal state,
+            # which is the expected finish for round-robin/delegation loops.
+            state.status = "completed"
 
         return GroupResult(
             problem=problem,
