@@ -10,7 +10,9 @@ from fastapi import FastAPI
 from loguru import logger
 
 from otelmind import __version__
+from otelmind.api.calibration_routes import router as calibration_router
 from otelmind.api.middleware import register_middleware
+from otelmind.api.multiagent_routes import router as multiagent_router
 from otelmind.api.rbac_routes import rbac_router
 from otelmind.api.routes import router
 from otelmind.config import settings
@@ -98,6 +100,10 @@ app.include_router(router, prefix="")
 # RBAC admin routes — roles, members, audit log
 app.include_router(rbac_router, prefix="/api/v1")
 app.include_router(rbac_router, prefix="/api")
+
+# Multi-agent group runs and judge calibration — already prefix-bound
+app.include_router(multiagent_router)
+app.include_router(calibration_router)
 
 
 def main() -> None:
