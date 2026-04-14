@@ -75,6 +75,7 @@ testpaths = ["tests"]
 addopts = "-v --tb=short"
 markers = [
     "slow: marks tests as slow — typically real network / LLM calls (deselect with -m 'not slow')",
+    "e2e: requires a real database (deselect with -m 'not e2e')",
 ]
 
 [tool.black]
