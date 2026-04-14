@@ -1,0 +1,54 @@
+{
+  "scenario_id": "performance-optimization-nplusone",
+  "protocol": "consensus",
+  "result": {
+    "problem": "Identify and fix the N+1 query and general performance issues in this endpoint.",
+    "protocol": "ConsensusProtocol",
+    "status": "failed",
+    "rounds_completed": 1,
+    "total_tokens": 0,
+    "final_output": null,
+    "messages": [],
+    "roles": [
+      {
+        "name": "coder",
+        "model": "claude-sonnet-4-20250514",
+        "metadata": {
+          "language": "python"
+        }
+      },
+      {
+        "name": "reviewer",
+        "model": "claude-sonnet-4-20250514",
+        "metadata": {}
+      },
+      {
+        "name": "critic",
+        "model": "claude-sonnet-4-20250514",
+        "metadata": {}
+      }
+    ],
+    "shared_context": {
+      "problem": "Identify and fix the N+1 query and general performance issues in this endpoint.",
+      "context": "@app.get(\"/projects\")\ndef list_projects():\n    projects = Project.query.all()\n    return [\n        {\"id\": p.id, \"name\": p.name, \"tasks\": [t.title for t in p.tasks]}\n        for p in projects\n    ]\n",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011Ca4WpzBPDgV52iZUezXVf'}"
+    },
+    "started_at": "2026-04-14T23:16:02.813034+00:00",
+    "completed_at": "2026-04-14T23:16:02.994153+00:00",
+    "budget_usd": 0.5,
+    "budget_remaining_usd": 0.5,
+    "cost_usd": 0.0
+  },
+  "metrics": {
+    "task_completion_score": 0.5,
+    "convergence_rate": 0.0,
+    "communication_efficiency": 0.0,
+    "error_correction_count": 0,
+    "dominance_score": 0.0,
+    "deadlock_occurred": true,
+    "rounds_to_completion": 1,
+    "total_tokens": 0,
+    "total_cost_usd": 0.0,
+    "per_agent_stats": {}
+  }
+}
