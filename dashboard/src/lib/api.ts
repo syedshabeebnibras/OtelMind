@@ -432,7 +432,7 @@ export const api = {
       if (params?.limit) q.set("limit", String(params.limit));
       if (params?.offset) q.set("offset", String(params.offset));
       const qs = q.toString();
-      return request<CalibrationsResponse>(`/calibrations/${qs ? `?${qs}` : ""}`);
+      return request<CalibrationsResponse>(`/calibrations${qs ? `?${qs}` : ""}`);
     },
 
     get(id: number | string): Promise<CalibrationDetail> {

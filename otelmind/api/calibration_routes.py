@@ -57,7 +57,7 @@ def _row_to_detail(row: JudgeCalibration) -> CalibrationDetail:
     )
 
 
-@router.post("/", response_model=CalibrationResponse, status_code=201)
+@router.post("", response_model=CalibrationResponse, status_code=201)
 async def create_calibration(
     body: CalibrationCreate,
     request: Request,
@@ -119,7 +119,7 @@ async def create_calibration(
     return CalibrationResponse(**detail.model_dump())
 
 
-@router.get("/", response_model=CalibrationsListResponse)
+@router.get("", response_model=CalibrationsListResponse)
 async def list_calibrations(
     request: Request,
     tenant: CurrentTenant,
