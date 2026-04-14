@@ -169,6 +169,75 @@ export interface EvalRunsResponse {
   total: number;
 }
 
+// ── Multi-agent ───────────────────────────────────────────────────────────────
+
+export interface GroupRunSummary {
+  id: string;
+  problem: string;
+  protocol: string;
+  status: string;
+  rounds_completed: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface GroupRunDetail extends GroupRunSummary {
+  roles: Array<Record<string, unknown>>;
+  result: Record<string, unknown> | null;
+  metrics: Record<string, unknown> | null;
+  messages: Array<Record<string, unknown>>;
+}
+
+export interface GroupRunsResponse {
+  items: GroupRunSummary[];
+  total: number;
+}
+
+export interface GroupMessage {
+  sender_id: string;
+  sender_role: string;
+  recipient_id: string | null;
+  content: string;
+  round_number: number;
+  token_usage: Record<string, number> | null;
+  created_at: string;
+}
+
+// ── Calibrations ─────────────────────────────────────────────────────────────
+
+export interface CalibrationSummary {
+  id: number;
+  judge_model: string;
+  cohens_kappa: number | null;
+  agreement_rate: number | null;
+  bias: number | null;
+  case_count: number;
+  created_at: string;
+}
+
+export interface CalibrationDetail extends CalibrationSummary {
+  per_dimension: Record<string, {
+    cohens_kappa: number;
+    agreement_rate: number;
+    mean_absolute_error: number;
+    bias: number;
+    n: number;
+  }> | null;
+  calibration_curve: Array<{
+    bin: number;
+    predicted: number;
+    actual: number;
+    n: number;
+  }> | null;
+}
+
+export interface CalibrationsResponse {
+  items: CalibrationSummary[];
+  total: number;
+}
+
 // ── Traces ───────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -316,6 +385,58 @@ export const api = {
         method: "POST",
         body: JSON.stringify(body),
       });
+    },
+  },
+
+  multiagent: {
+    list(params?: {
+      limit?: number;
+      offset?: number;
+      status?: string;
+    }): Promise<GroupRunsResponse> {
+      const q = new URLSearchParams();
+      if (params?.limit) q.set("limit", String(params.limit));
+      if (params?.offset) q.set("offset", String(params.offset));
+      if (params?.status) q.set("status", params.status);
+      const qs = q.toString();
+      return request<GroupRunsResponse>(`/multiagent/runs${qs ? `?${qs}` : ""}`);
+    },
+
+    get(id: string): Promise<GroupRunDetail> {
+      return request<GroupRunDetail>(`/multiagent/runs/${id}`);
+    },
+
+    messages(id: string): Promise<GroupMessage[]> {
+      return request<GroupMessage[]>(`/multiagent/runs/${id}/messages`);
+    },
+
+    create(body: {
+      problem: string;
+      context?: string;
+      roles: Array<Record<string, unknown>>;
+      protocol?: string;
+      max_rounds?: number;
+      expected_output?: string;
+      budget_usd?: number;
+    }): Promise<GroupRunSummary> {
+      return request<GroupRunSummary>("/multiagent/runs", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    },
+  },
+
+  calibrations: {
+    list(params?: { limit?: number; offset?: number }): Promise<CalibrationsResponse> {
+      const q = new URLSearchParams();
+      if (params?.limit) q.set("limit", String(params.limit));
+      if (params?.offset) q.set("offset", String(params.offset));
+      const qs = q.toString();
+      return request<CalibrationsResponse>(`/calibrations/${qs ? `?${qs}` : ""}`);
+    },
+
+    get(id: number | string): Promise<CalibrationDetail> {
+      return request<CalibrationDetail>(`/calibrations/${id}`);
     },
   },
 };

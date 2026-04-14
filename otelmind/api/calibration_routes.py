@@ -28,7 +28,7 @@ from otelmind.eval.judge import LLMJudge
 from otelmind.eval.regression import EvalCase
 from otelmind.storage.models import JudgeCalibration
 
-router = APIRouter(prefix="/api/calibrations", tags=["calibrations"])
+router = APIRouter(prefix="/calibrations", tags=["calibrations"])
 
 
 def _row_to_summary(row: JudgeCalibration) -> CalibrationSummary:

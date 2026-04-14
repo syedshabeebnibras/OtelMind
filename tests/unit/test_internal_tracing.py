@@ -78,9 +78,11 @@ def test_trace_calibration_records_case_count(memory_exporter):
 
 
 def test_nested_spans_attach_to_parent(memory_exporter):
-    with trace_batch_scoring(total_cases=2, concurrency=1):
-        with trace_judge_call(dimension="relevance", model="gpt-4o-mini"):
-            pass
+    with (
+        trace_batch_scoring(total_cases=2, concurrency=1),
+        trace_judge_call(dimension="relevance", model="gpt-4o-mini"),
+    ):
+        pass
     spans = memory_exporter.get_finished_spans()
     # Spans flush in completion order — child finishes first
     by_name = {s.name: s for s in spans}

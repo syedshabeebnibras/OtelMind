@@ -8,6 +8,8 @@ import {
   DollarSign,
   Bell,
   FlaskConical,
+  Users,
+  Target,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -42,6 +44,18 @@ const navItems = [
     href: "/evals",
     icon: FlaskConical,
     description: "Evaluation runs",
+  },
+  {
+    label: "Multi-agent",
+    href: "/multiagent",
+    icon: Users,
+    description: "Multi-agent group runs",
+  },
+  {
+    label: "Calibrations",
+    href: "/calibrations",
+    icon: Target,
+    description: "Judge calibration runs",
   },
 ];
 
