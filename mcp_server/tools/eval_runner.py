@@ -52,9 +52,7 @@ Respond with ONLY:
 
 def _fuzzy_accuracy(actual: str, expected: str) -> float:
     """Normalised edit-distance similarity (0–1)."""
-    return SequenceMatcher(
-        None, actual.strip().lower(), expected.strip().lower()
-    ).ratio()
+    return SequenceMatcher(None, actual.strip().lower(), expected.strip().lower()).ratio()
 
 
 async def _llm_score(prompt_template: str, api_key: str, **kwargs: str) -> dict[str, Any]:
@@ -102,9 +100,7 @@ async def _score_test_case(
     if llm_metrics_needed and not api_key:
         for metric in llm_metrics_needed:
             scores[metric] = None
-            scores[f"{metric}_reasoning"] = (
-                "OPENAI_API_KEY not set — LLM scoring unavailable"
-            )
+            scores[f"{metric}_reasoning"] = "OPENAI_API_KEY not set — LLM scoring unavailable"
     elif llm_metrics_needed and api_key:
         tasks = []
         task_labels = []
@@ -133,7 +129,7 @@ async def _score_test_case(
             task_labels.append("relevance")
 
         results = await asyncio.gather(*tasks)
-        for label, res in zip(task_labels, results):
+        for label, res in zip(task_labels, results, strict=True):
             raw_score = res.get("score")
             scores[label] = round(raw_score, 4) if isinstance(raw_score, (int, float)) else None
             scores[f"{label}_reasoning"] = res.get("reasoning", "")

@@ -92,21 +92,16 @@ async def test_flush_writes_every_buffer_type_in_one_transaction():
 
 
 @pytest.mark.asyncio
-async def test_batch_size_threshold_buffer_fills_to_limit():
-    """write() buffers up to the batch_size before the auto-flush triggers.
-
-    The auto-flush inside write() re-acquires the writer's async lock, which is
-    a pre-existing non-reentrancy issue in BatchWriter. We therefore verify the
-    buffer-accumulation side of the threshold, not the re-entrant flush itself.
-    The timer-driven flush path (exercised by `test_flush_writes_every_buffer_type`)
-    is the production-safe path.
-    """
-    pool, _ = _mock_pool()
-    writer = BatchWriter(pool, batch_size=100)
-    for i in range(5):
+async def test_batch_size_threshold_triggers_flush():
+    """Hitting the batch_size inside write() triggers an auto-flush."""
+    pool, conn = _mock_pool()
+    writer = BatchWriter(pool, batch_size=3)
+    for i in range(3):
         await writer.write(_record(f"s{i}"))
-    assert len(writer._span_buffer) == 5
-    assert writer.batch_size == 100
+    # Traces + spans + tokens = 3 executemany calls (no errors)
+    assert conn.executemany.await_count == 3
+    assert writer._span_buffer == []
+    assert writer._trace_buffer == []
 
 
 @pytest.mark.asyncio

@@ -64,10 +64,7 @@ async def _llm_hallucination_check(
         logger.warning("openai not installed — falling back to heuristic")
         return None
 
-    user_msg = (
-        f"Source context:\n{source_context}\n\n"
-        f"LLM output to verify:\n{llm_output}"
-    )
+    user_msg = f"Source context:\n{source_context}\n\nLLM output to verify:\n{llm_output}"
     try:
         client = openai.AsyncOpenAI(api_key=api_key)
         response = await client.chat.completions.create(
@@ -110,18 +107,18 @@ async def check_hallucination(llm_output: str, source_context: str) -> dict:
 
     # --- Keyword-overlap heuristic fallback ---
     overlap = _keyword_overlap_score(llm_output, source_context)
-    THRESHOLD = 0.30  # 30% keyword overlap required to consider output grounded
+    threshold = 0.30  # 30% keyword overlap required to consider output grounded
 
-    is_grounded = overlap >= THRESHOLD
+    is_grounded = overlap >= threshold
 
     if is_grounded:
         # Confidence scales from 0.5 (at threshold) to 1.0 (full overlap)
-        denom = 1.0 - THRESHOLD or 1.0
-        confidence = 0.5 + (overlap - THRESHOLD) / denom * 0.5
+        denom = 1.0 - threshold or 1.0
+        confidence = 0.5 + (overlap - threshold) / denom * 0.5
     else:
         # Confidence scales from 0.5 (at threshold) to 1.0 (zero overlap)
-        denom = THRESHOLD or 1.0
-        confidence = 0.5 + (THRESHOLD - overlap) / denom * 0.5
+        denom = threshold or 1.0
+        confidence = 0.5 + (threshold - overlap) / denom * 0.5
 
     confidence = round(min(confidence, 1.0), 4)
 

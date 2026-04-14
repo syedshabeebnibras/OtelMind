@@ -49,8 +49,7 @@ def upgrade() -> None:
         "DROP CONSTRAINT IF EXISTS remediation_actions_failure_id_fkey"
     )
     op.execute(
-        "ALTER TABLE remediation_actions "
-        "DROP CONSTRAINT IF EXISTS fk_remediation_failure_id"
+        "ALTER TABLE remediation_actions DROP CONSTRAINT IF EXISTS fk_remediation_failure_id"
     )
 
     op.create_index(

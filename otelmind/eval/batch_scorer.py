@@ -124,6 +124,7 @@ class BatchScorer:
                                 "score": s.score,
                                 "raw_score": s.raw_score,
                                 "method": s.method,
+                                "reason": s.reason,
                             }
                             for dim, s in result.scores.items()
                         },

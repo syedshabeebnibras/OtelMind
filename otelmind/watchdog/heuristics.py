@@ -46,7 +46,7 @@ def check_infinite_loop(spans: list[dict[str, Any]], threshold: int = 5) -> dict
                 "failure_type": "infinite_loop",
                 "confidence": min(count / (threshold * 2), 1.0),
                 "judge_model": "heuristic",
-                "reasoning": (f"Node '{name}' executed {count} times " f"(threshold: {threshold})"),
+                "reasoning": (f"Node '{name}' executed {count} times (threshold: {threshold})"),
             }
     return None
 

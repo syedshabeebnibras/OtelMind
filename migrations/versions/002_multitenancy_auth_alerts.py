@@ -4,6 +4,7 @@ Revision ID: 002
 Revises: 001
 Create Date: 2026-04-11
 """
+
 from __future__ import annotations
 
 import uuid
@@ -76,7 +77,9 @@ def upgrade() -> None:
         sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("channel_type", sa.String(32), nullable=False),
-        sa.Column("config", postgresql.JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "config", postgresql.JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
@@ -135,7 +138,9 @@ def upgrade() -> None:
     op.create_index("ix_spans_tenant_trace_id", "spans", ["tenant_id", "trace_id"])
 
     # --- token_counts: tenant_id + pricing columns ---
-    op.add_column("token_counts", sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=True))
+    op.add_column(
+        "token_counts", sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=True)
+    )
     op.add_column(
         "token_counts",
         sa.Column("model_provider", sa.String(64), nullable=False, server_default="unknown"),

@@ -66,6 +66,7 @@ class BatchWriter:
 
     async def write(self, processed: dict[str, Any]) -> None:
         """Add a processed span to the write buffer."""
+        should_flush = False
         async with self._lock:
             self._trace_buffer.append(processed["trace"])
             self._span_buffer.append(processed["span"])
@@ -75,7 +76,12 @@ class BatchWriter:
                 self._error_buffer.append(processed["error"])
 
             if len(self._span_buffer) >= self.batch_size:
-                await self._flush()
+                should_flush = True
+
+        if should_flush:
+            # Flush outside the lock — asyncio.Lock is not reentrant, and
+            # _flush acquires it itself to swap buffers atomically.
+            await self._flush()
 
     async def _flush_loop(self) -> None:
         """Background task that flushes on a timer."""
@@ -118,7 +124,6 @@ class BatchWriter:
             )
         except Exception as e:
             logger.error("Failed to flush batch: %s", e)
-            # Put records back for retry
             async with self._lock:
                 self._trace_buffer = traces + self._trace_buffer
                 self._span_buffer = spans + self._span_buffer

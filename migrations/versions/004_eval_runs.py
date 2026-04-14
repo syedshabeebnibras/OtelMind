@@ -39,9 +39,7 @@ def upgrade() -> None:
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
     )
-    op.create_index(
-        "ix_eval_runs_tenant_created", "eval_runs", ["tenant_id", "created_at"]
-    )
+    op.create_index("ix_eval_runs_tenant_created", "eval_runs", ["tenant_id", "created_at"])
 
 
 def downgrade() -> None:

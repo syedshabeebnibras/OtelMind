@@ -35,7 +35,7 @@ def _build_html(
     <div class="field">
       <div class="label">Failure Type</div>
       <div class="value">
-        <span class="badge {'critical' if confidence >= 0.9 else 'warning'}">{failure_type.replace('_', ' ').upper()}</span>
+        <span class="badge {"critical" if confidence >= 0.9 else "warning"}">{failure_type.replace("_", " ").upper()}</span>
       </div>
     </div>
     <div class="field"><div class="label">Service</div><div class="value">{service_name}</div></div>
