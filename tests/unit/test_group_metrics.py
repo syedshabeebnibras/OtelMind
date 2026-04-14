@@ -127,6 +127,50 @@ async def test_evaluate_group_empty_messages_handled():
 
 
 @pytest.mark.asyncio
+async def test_evaluate_group_uses_llm_correction_detector_when_judge_has_key(monkeypatch):
+    """When the judge has an API key, evaluate_group routes correction detection
+    through the LLM auditor instead of the regex pattern matcher."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    messages = [
+        _msg("a-0", "coder", "x" * 80, 100),
+        _msg("b-0", "reviewer", "y" * 80, 100),
+        _msg("a-0", "coder", "z" * 80, 100),
+    ]
+    result = _group_result(messages, status="completed", rounds=1)
+
+    judge = MagicMock()
+    judge._api_key = "fake-key"
+    judge._model = "gpt-4o"
+
+    async def fake_detect(msgs, j):
+        return {
+            "b-0": {"corrections_made": 1, "corrections_received": 0},
+            "a-0": {"corrections_made": 0, "corrections_received": 1},
+        }
+
+    with patch("otelmind.eval.group_metrics._detect_corrections_with_llm", AsyncMock(side_effect=fake_detect)):
+        eval_result = await evaluate_group(result, judge=judge, max_rounds=5)
+
+    assert eval_result.error_correction_count == 1
+    assert eval_result.per_agent_stats["b-0"].corrections_made == 1
+    assert eval_result.per_agent_stats["a-0"].corrections_received == 1
+
+
+@pytest.mark.asyncio
+async def test_evaluate_group_falls_back_to_regex_when_no_judge_key():
+    """No judge key => regex detector path."""
+    messages = [
+        _msg("a-0", "coder", "answer is 42 " + "x" * 60, 100),
+        _msg("b-0", "reviewer", "actually that is wrong, the answer is 43", 100),
+    ]
+    result = _group_result(messages, status="completed", rounds=1)
+    eval_result = await evaluate_group(result, max_rounds=5)
+    # Regex sees "actually" + "that is wrong" → at least 1 correction
+    assert eval_result.error_correction_count >= 1
+
+
+@pytest.mark.asyncio
 async def test_evaluate_group_short_messages_count_as_redundant():
     messages = [_msg("a", "r", "ok", 10) for _ in range(5)]
     result = _group_result(messages, status="completed", rounds=1)

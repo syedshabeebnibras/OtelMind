@@ -107,6 +107,80 @@ def _estimate_cost(messages: list[Any]) -> float:
     return total
 
 
+_CORRECTION_DETECT_PROMPT = """You are auditing inter-agent collaboration messages.
+
+Earlier message from {sender_a} ({role_a}):
+"{content_a}"
+
+Later message from {sender_b} ({role_b}):
+"{content_b}"
+
+Did the later message correct an error, factual mistake, or misconception in
+the earlier message? Reply with ONLY a JSON object:
+{{"correction": true|false, "reason": "one short sentence"}}
+
+Be conservative — minor rephrasing or polite addition is NOT a correction.
+"""
+
+
+async def _detect_corrections_with_llm(
+    messages: list[Any],
+    judge: LLMJudge,
+) -> dict[str, dict[str, int]]:
+    """Use an LLM judge to count corrections between consecutive cross-agent messages.
+
+    Returns {agent_id: {"corrections_made": int, "corrections_received": int}}.
+    Falls back to an empty result on any failure (caller decides what to do).
+    """
+    import json
+
+    if len(messages) < 2:
+        return {}
+
+    counts: dict[str, dict[str, int]] = {}
+    for i in range(1, len(messages)):
+        prev = messages[i - 1]
+        curr = messages[i]
+        if prev.sender_id == curr.sender_id:
+            continue
+        prompt = _CORRECTION_DETECT_PROMPT.format(
+            sender_a=prev.sender_id,
+            role_a=prev.sender_role,
+            content_a=(prev.content or "")[:1500],
+            sender_b=curr.sender_id,
+            role_b=curr.sender_role,
+            content_b=(curr.content or "")[:1500],
+        )
+        try:
+            # Reuse the judge's underlying client by sending a single-question
+            # scoring request. We hijack the score() interface — score() returns
+            # a JudgeResult with a `reason` we don't actually use; instead we
+            # inspect the LLM's raw answer via a dimension whose prompt we control.
+            # Cleaner: call the OpenAI client directly through the judge's API key.
+            import openai
+
+            client = openai.AsyncOpenAI(api_key=judge._api_key, timeout=30.0)
+            resp = await client.chat.completions.create(
+                model=judge._model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                max_tokens=80,
+                response_format={"type": "json_object"},
+            )
+            data = json.loads(resp.choices[0].message.content or "{}")
+            if not data.get("correction"):
+                continue
+        except Exception as exc:
+            logger.warning("evaluate_group: LLM correction check failed: {}", exc)
+            continue
+
+        counts.setdefault(curr.sender_id, {"corrections_made": 0, "corrections_received": 0})
+        counts.setdefault(prev.sender_id, {"corrections_made": 0, "corrections_received": 0})
+        counts[curr.sender_id]["corrections_made"] += 1
+        counts[prev.sender_id]["corrections_received"] += 1
+    return counts
+
+
 async def evaluate_group(
     group_result: GroupResult,
     expected_output: str | None = None,
@@ -129,34 +203,58 @@ async def evaluate_group(
     else:
         convergence_rate = 0.0
 
-    # Per-agent stats
+    # Per-agent stats — token + message accounting (cheap)
     per_agent_messages: dict[str, int] = {}
     per_agent_tokens: dict[str, int] = {}
-    per_agent_corrections_made: dict[str, int] = {}
-    per_agent_corrections_received: dict[str, int] = {}
-
-    previous_by_agent: dict[str, str] = {}
-    error_corrections = 0
-
     for m in messages:
         per_agent_messages[m.sender_id] = per_agent_messages.get(m.sender_id, 0) + 1
         usage = m.token_usage or {}
         per_agent_tokens[m.sender_id] = per_agent_tokens.get(m.sender_id, 0) + int(
             usage.get("total_tokens", 0)
         )
-        hits = _count_corrections(m.content)
-        if hits > 0:
-            per_agent_corrections_made[m.sender_id] = (
-                per_agent_corrections_made.get(m.sender_id, 0) + hits
-            )
-            for prior_agent in previous_by_agent:
-                if prior_agent == m.sender_id:
-                    continue
-                per_agent_corrections_received[prior_agent] = (
-                    per_agent_corrections_received.get(prior_agent, 0) + hits
+
+    # Correction detection — prefer the LLM auditor when a real judge is available
+    # (model-grounded, fewer false positives on rhetorical phrases). Fall back to
+    # the regex pattern matcher otherwise.
+    per_agent_corrections_made: dict[str, int] = {}
+    per_agent_corrections_received: dict[str, int] = {}
+    error_corrections = 0
+    correction_method = "regex"
+
+    judge_for_corrections = judge
+    if judge_for_corrections is not None and getattr(judge_for_corrections, "_api_key", ""):
+        try:
+            llm_counts = await _detect_corrections_with_llm(messages, judge_for_corrections)
+            if llm_counts:
+                correction_method = "llm"
+                for agent_id, payload in llm_counts.items():
+                    per_agent_corrections_made[agent_id] = payload.get("corrections_made", 0)
+                    per_agent_corrections_received[agent_id] = payload.get(
+                        "corrections_received", 0
+                    )
+                error_corrections = sum(
+                    p.get("corrections_made", 0) for p in llm_counts.values()
                 )
-            error_corrections += hits
-        previous_by_agent[m.sender_id] = m.content
+        except Exception as exc:
+            logger.warning("evaluate_group: LLM correction detector failed, falling back: {}", exc)
+
+    if correction_method == "regex":
+        previous_by_agent: dict[str, str] = {}
+        for m in messages:
+            hits = _count_corrections(m.content)
+            if hits > 0:
+                per_agent_corrections_made[m.sender_id] = (
+                    per_agent_corrections_made.get(m.sender_id, 0) + hits
+                )
+                for prior_agent in previous_by_agent:
+                    if prior_agent == m.sender_id:
+                        continue
+                    per_agent_corrections_received[prior_agent] = (
+                        per_agent_corrections_received.get(prior_agent, 0) + hits
+                    )
+                error_corrections += hits
+            previous_by_agent[m.sender_id] = m.content
+    logger.debug("evaluate_group: correction detection method = {}", correction_method)
 
     total_tokens_reported = sum(per_agent_tokens.values()) or group_result.total_tokens
     per_agent_stats: dict[str, AgentStats] = {}
