@@ -164,6 +164,29 @@ class AppConfig:
         default_factory=lambda: _env_int("EVAL_DAILY_RUN_UTC_HOUR", 2),
     )
 
+    # ─ Multi-agent group eval ────────────────────────────────────────
+    anthropic_api_key: str = field(default_factory=lambda: _env("ANTHROPIC_API_KEY"))
+    multiagent_default_model: str = field(
+        default_factory=lambda: _env("MULTIAGENT_MODEL", "claude-sonnet-4-20250514"),
+    )
+    multiagent_max_rounds: int = field(
+        default_factory=lambda: _env_int("MULTIAGENT_MAX_ROUNDS", 10),
+    )
+
+    # ─ Scaled evaluation ─────────────────────────────────────────────
+    eval_batch_concurrency: int = field(
+        default_factory=lambda: _env_int("EVAL_BATCH_CONCURRENCY", 10),
+    )
+    eval_meta_eval_enabled: bool = field(
+        default_factory=lambda: _env_bool("EVAL_META_EVAL_ENABLED", False),
+    )
+    eval_meta_eval_sample_rate: float = field(
+        default_factory=lambda: float(_env("EVAL_META_EVAL_SAMPLE_RATE", "0.2")),
+    )
+    eval_auditor_model: str = field(
+        default_factory=lambda: _env("EVAL_AUDITOR_MODEL", "claude-sonnet-4-20250514"),
+    )
+
     # Alerting
     slack_default_webhook: str = field(default_factory=lambda: _env("SLACK_WEBHOOK_URL", ""))
     pagerduty_routing_key: str = field(default_factory=lambda: _env("PAGERDUTY_ROUTING_KEY", ""))
