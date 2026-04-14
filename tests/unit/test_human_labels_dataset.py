@@ -19,8 +19,26 @@ def cases() -> list[dict]:
     return data["cases"]
 
 
-def test_dataset_has_25_cases(cases):
-    assert len(cases) == 25
+def test_dataset_has_33_cases(cases):
+    assert len(cases) == 33
+
+
+def test_non_cs_cases_present(cases):
+    """The 8 non-CS cases (hl-026..hl-033) round out the domain coverage."""
+    new_ids = {f"hl-0{n}" for n in range(26, 34)}
+    have = {c["id"] for c in cases}
+    missing = new_ids - have
+    assert not missing, f"missing non-CS cases: {missing}"
+
+
+def test_every_new_case_has_all_dimensions(cases):
+    required_dims = {"faithfulness", "relevance", "coherence", "safety"}
+    new_ids = {f"hl-0{n}" for n in range(26, 34)}
+    for c in cases:
+        if c["id"] not in new_ids:
+            continue
+        missing = required_dims - set(c["human_scores"])
+        assert not missing, f"{c['id']} missing dimensions: {missing}"
 
 
 def test_every_case_has_required_fields(cases):

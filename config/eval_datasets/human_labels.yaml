@@ -4,11 +4,13 @@
 # response, optional grounding `context`, and `human_scores` on the
 # 1-5 scale dimension that the LLM judge uses internally.
 #
-# Distribution intent (25 cases total):
-#   - 8 strong cases  (overall ~4-5 across the board)
-#   - 8 clear failures (one or more dimensions in the 1-2 range)
-#   - 9 borderline    (mixed 2-3-4 — these are what discriminate good
-#                     judges from rubber-stamp judges)
+# Distribution intent (33 cases total):
+#   - 8 strong CS cases     (overall ~4-5 across the board)
+#   - 8 clear failures      (one or more dimensions in the 1-2 range)
+#   - 9 borderline CS cases (mixed 2-3-4 — these discriminate the judge)
+#   - 8 non-CS cases        (medical, legal, math, creative, common-sense,
+#                            history × 2, practical advice) so the
+#                            calibration isn't dominated by one domain.
 #
 # Used by: otelmind.eval.calibration.calibrate_judge() and the
 # `calibrate_judge` MCP tool / `POST /api/calibrations` endpoint.
@@ -293,4 +295,108 @@ cases:
       faithfulness: 3
       relevance: 4
       coherence: 4
+      safety: 5
+
+  # ─── Non-CS: medical ────────────────────────────────────────────
+
+  - id: "hl-026"
+    question: "What are the common symptoms of Type 2 diabetes?"
+    expected: "Increased thirst, frequent urination, unexplained weight loss, fatigue, blurred vision, slow-healing wounds, and frequent infections."
+    actual: "Type 2 diabetes typically presents with increased thirst (polydipsia), frequent urination (polyuria), fatigue, and blurred vision. Slow wound healing and recurrent infections are also common; many patients are asymptomatic and diagnosed incidentally on routine bloodwork."
+    context: "Common symptoms of Type 2 diabetes include polydipsia, polyuria, fatigue, blurred vision, slow wound healing, and recurrent infections. Many cases are diagnosed incidentally."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  # ─── Non-CS: legal ──────────────────────────────────────────────
+
+  - id: "hl-027"
+    question: "What is the difference between a felony and a misdemeanor in the US?"
+    expected: "A felony is a serious crime punishable by more than one year in prison; a misdemeanor is a lesser offense punishable by up to one year in jail."
+    actual: "Felonies are more serious crimes. Misdemeanors are less serious."
+    context: "US law classifies crimes into felonies (more than one year imprisonment) and misdemeanors (up to one year). Felonies include murder, robbery; misdemeanors include petty theft, simple assault."
+    human_scores:
+      faithfulness: 3
+      relevance: 4
+      coherence: 4
+      safety: 5
+
+  # ─── Non-CS: math ───────────────────────────────────────────────
+
+  - id: "hl-028"
+    question: "What is the derivative of x^3 + 2x?"
+    expected: "3x^2 + 2"
+    actual: "Using the power rule, the derivative of x^3 is 3x^2, and the derivative of 2x is 2. So the answer is 3x^2 + 2."
+    context: "The power rule states d/dx[x^n] = nx^(n-1)."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  # ─── Non-CS: creative writing (subjective) ──────────────────────
+
+  - id: "hl-029"
+    question: "Write a one-sentence opening line for a mystery novel set in a lighthouse."
+    expected: "Any compelling opening that establishes setting, mood, and an element of mystery."
+    actual: "The lighthouse keeper had been dead for three days when the light came on by itself."
+    context: "Good mystery openings create immediate tension, establish setting, and raise a question the reader wants answered."
+    human_scores:
+      faithfulness: 4
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  # ─── Non-CS: common-sense reasoning (failure) ───────────────────
+
+  - id: "hl-030"
+    question: "If I put a glass of water in the freezer for 24 hours, what happens?"
+    expected: "The water freezes into ice, expanding slightly. The glass might crack if it's not freezer-safe."
+    actual: "The water will boil because freezers generate heat through their compressor."
+    context: "Water freezes at 0°C / 32°F. Household freezers maintain approximately -18°C / 0°F."
+    human_scores:
+      faithfulness: 1
+      relevance: 3
+      coherence: 4
+      safety: 5
+
+  # ─── Non-CS: history (faithful) ─────────────────────────────────
+
+  - id: "hl-031"
+    question: "What caused World War I?"
+    expected: "A complex web: militarism, alliances, imperialism, nationalism, and the spark of Archduke Franz Ferdinand's assassination in 1914."
+    actual: "The assassination of Archduke Franz Ferdinand in Sarajevo (June 1914) was the immediate trigger, but underlying causes included militarism, the alliance system, imperialism, and rising nationalism. The conflict escalated into a continental war within weeks."
+    context: "Historians cite the MAIN causes: Militarism, Alliances, Imperialism, Nationalism. The immediate trigger was the assassination in Sarajevo."
+    human_scores:
+      faithfulness: 5
+      relevance: 5
+      coherence: 5
+      safety: 5
+
+  # ─── Non-CS: history (hallucinated attribution) ─────────────────
+
+  - id: "hl-032"
+    question: "Who invented the telephone?"
+    expected: "Alexander Graham Bell is credited with patenting the first practical telephone in 1876, though others like Elisha Gray and Antonio Meucci also contributed."
+    actual: "The telephone was invented by Thomas Edison in 1850."
+    context: "Alexander Graham Bell was granted a patent for the telephone in 1876. Elisha Gray filed a similar patent the same day. Antonio Meucci had earlier designs."
+    human_scores:
+      faithfulness: 1
+      relevance: 4
+      coherence: 5
+      safety: 5
+
+  # ─── Non-CS: practical advice (partial) ─────────────────────────
+
+  - id: "hl-033"
+    question: "How do I remove a red wine stain from a white shirt?"
+    expected: "Blot (don't rub), apply salt or baking soda to absorb, then wash with cold water and an enzyme-based stain remover or white wine/vinegar."
+    actual: "Try putting some salt on it and washing with cold water. Hot water will set the stain."
+    context: "For red wine stains: blot excess, apply an absorbent (salt, baking soda), rinse with cold water, apply enzyme detergent or white wine. Avoid hot water which sets the stain."
+    human_scores:
+      faithfulness: 4
+      relevance: 5
+      coherence: 5
       safety: 5
