@@ -42,7 +42,9 @@ from sqlalchemy import desc, select
 from otelmind.config import settings
 from otelmind.db import get_session
 from otelmind.eval.judge import DIMENSIONS, JudgeResult, LLMJudge
+from otelmind.eval.meta_eval import MetaEvaluator
 from otelmind.eval.regression import EvalCase, run_regression
+from otelmind.eval.statistics import is_regression_significant
 from otelmind.storage.models import (
     EvalRun,
     FailureClassification,
@@ -150,6 +152,7 @@ async def _execute_eval_run(run_id: _uuid.UUID) -> None:
 
     # Aggregate per-dimension mean score — display on the dashboard.
     dim_summary: dict[str, float] = {}
+    significance: dict[str, Any] = {}
     if report.per_case:
         for dim in DIMENSIONS:
             values = [
@@ -160,12 +163,36 @@ async def _execute_eval_run(run_id: _uuid.UUID) -> None:
             if values:
                 dim_summary[dim] = round(sum(values) / len(values), 4)
 
+        # Per-dimension statistical significance (bootstrap + effect size).
+        for dim in DIMENSIONS:
+            baseline_vals = [
+                c["dimensions"][dim]["baseline"]
+                for c in report.per_case
+                if dim in c.get("dimensions", {})
+            ]
+            candidate_vals = [
+                c["dimensions"][dim]["candidate"]
+                for c in report.per_case
+                if dim in c.get("dimensions", {})
+            ]
+            if len(baseline_vals) >= 3 and len(candidate_vals) >= 3:
+                is_sig, details = is_regression_significant(
+                    baseline_vals,
+                    candidate_vals,
+                    threshold=settings.eval_regression_threshold,
+                )
+                significance[dim] = {"significant_regression": is_sig, **details}
+
+    rigorous_pass = report.passed and not any(
+        v.get("significant_regression") for v in significance.values()
+    )
+
     async with get_session() as session:
         row = await session.scalar(select(EvalRun).where(EvalRun.id == run_id))
         if row is None:
             return
         row.status = "completed"
-        row.passed = report.passed
+        row.passed = rigorous_pass
         row.scores = dim_summary
         row.regression_count = len(report.regressions)
         row.improvement_count = len(report.improvements)
@@ -176,7 +203,14 @@ async def _execute_eval_run(run_id: _uuid.UUID) -> None:
             "summary": report.summary,
             "regressions": report.regressions[:50],
             "improvements": report.improvements[:50],
+            "significance": significance,
         }
+
+    if settings.eval_meta_eval_enabled:
+        try:
+            await _run_meta_eval(run_id, baseline, candidate, report)
+        except Exception as exc:
+            logger.warning("eval: meta-eval failed for run {}: {}", run_id, exc)
         row.completed_at = datetime.now(UTC)
 
     logger.info(
@@ -323,9 +357,17 @@ async def _autoscore_tenant(tenant: Tenant, judge: LLMJudge) -> int:
     if not sampled:
         return 0
 
+    # Score concurrently, capped by eval_batch_concurrency.
+    semaphore = asyncio.Semaphore(max(1, settings.eval_batch_concurrency))
+
+    async def _bounded_score(trace: Trace) -> tuple[Trace, JudgeResult | None]:
+        async with semaphore:
+            return trace, await _score_trace(trace, judge)
+
+    results = await asyncio.gather(*[_bounded_score(t) for t in sampled])
+
     scored = 0
-    for trace in sampled:
-        result = await _score_trace(trace, judge)
+    for trace, result in results:
         if result is None:
             continue
         await _persist_trace_scores(tenant.id, trace.trace_id, result)
@@ -581,3 +623,57 @@ async def daily_golden_regression_loop() -> None:
         # Check every 10 minutes — cheap, and catches the target hour
         # within reasonable latency without a precise cron scheduler.
         await asyncio.sleep(600)
+
+
+async def _run_meta_eval(
+    run_id: _uuid.UUID,
+    baseline: list[EvalCase],
+    candidate: list[EvalCase],
+    report: Any,
+) -> None:
+    """Run the auditor over a sample of candidate cases and log agreement."""
+    if not settings.anthropic_api_key:
+        logger.info("eval: meta-eval skipped — ANTHROPIC_API_KEY not set")
+        return
+
+    judge = LLMJudge(
+        api_key=settings.llm.api_key or None,
+        model=settings.llm.model or "gpt-4o",
+    )
+    judge_results: list[JudgeResult] = []
+    resolved: list[EvalCase] = []
+    for case in candidate:
+        try:
+            result = await judge.score(
+                case.question, case.actual, case.context, list(DIMENSIONS)
+            )
+        except Exception as exc:
+            logger.warning("meta-eval: judge re-score failed for {}: {}", case.id, exc)
+            continue
+        judge_results.append(result)
+        resolved.append(case)
+
+    if not judge_results:
+        return
+
+    evaluator = MetaEvaluator()
+    meta_report = await evaluator.audit_scores(
+        resolved,
+        judge_results,
+        sample_rate=settings.eval_meta_eval_sample_rate,
+        primary_judge_model=settings.llm.model or "gpt-4o",
+    )
+
+    async with get_session() as session:
+        row = await session.scalar(select(EvalRun).where(EvalRun.id == run_id))
+        if row is None:
+            return
+        row.details = {**(row.details or {}), "meta_eval": meta_report.to_dict()}
+
+    logger.info(
+        "eval: meta-eval run={} audited={} agreement={:.2%} flagged={}",
+        run_id,
+        meta_report.total_audited,
+        meta_report.agreement_rate,
+        len(meta_report.flagged_cases),
+    )
