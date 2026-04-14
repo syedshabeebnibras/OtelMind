@@ -65,7 +65,8 @@ async def create_calibration(
     _: Annotated[None, Depends(require_scope("write", "admin"))],
 ) -> CalibrationResponse:
     """Score the supplied cases with the LLM judge, compare to the human labels."""
-    await enforce_tenant_rate_limit(request, tenant, "write")
+    # Bucket = Literal["ingest", "read"] — POST counts against the ingest budget
+    await enforce_tenant_rate_limit(request, tenant, "ingest")
 
     if not body.test_cases:
         raise HTTPException(status_code=422, detail="test_cases must be non-empty")
