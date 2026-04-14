@@ -203,3 +203,85 @@ async def test_get_messages_invalid_uuid_422(auth, stub_session):
             "/api/v1/multiagent/runs/abc/messages", headers={"x-api-key": "test"}
         )
     assert resp.status_code == 422
+
+
+# ─── Startup recovery for stuck group runs ─────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_stuck_run_recovery_marks_old_running_rows_as_failed(monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    from otelmind.api import main as main_module
+
+    now = datetime.now(UTC)
+    stuck_1 = MagicMock(
+        id=uuid.uuid4(),
+        status="running",
+        created_at=now - timedelta(minutes=15),
+        result=None,
+    )
+    stuck_2 = MagicMock(
+        id=uuid.uuid4(),
+        status="pending",
+        created_at=now - timedelta(minutes=20),
+        result={"old": "data"},
+    )
+
+    session = MagicMock()
+    session.execute = AsyncMock(
+        return_value=MagicMock(
+            scalars=MagicMock(
+                return_value=MagicMock(all=MagicMock(return_value=[stuck_1, stuck_2]))
+            )
+        )
+    )
+
+    @asynccontextmanager
+    async def factory():
+        yield session
+
+    monkeypatch.setattr(main_module, "get_session", factory)
+
+    n = await main_module._recover_stuck_group_runs(stuck_after_minutes=10)
+
+    assert n == 2
+    assert stuck_1.status == "failed"
+    assert stuck_2.status == "failed"
+    assert "Process restarted" in stuck_1.result["error"]
+    assert stuck_2.result["old"] == "data"  # pre-existing keys preserved
+    assert stuck_1.completed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_stuck_run_recovery_no_stuck_rows_returns_zero(monkeypatch):
+    from otelmind.api import main as main_module
+
+    session = MagicMock()
+    session.execute = AsyncMock(
+        return_value=MagicMock(
+            scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+        )
+    )
+
+    @asynccontextmanager
+    async def factory():
+        yield session
+
+    monkeypatch.setattr(main_module, "get_session", factory)
+
+    assert await main_module._recover_stuck_group_runs(stuck_after_minutes=10) == 0
+
+
+@pytest.mark.asyncio
+async def test_stuck_run_recovery_swallows_db_errors(monkeypatch):
+    """If the DB is unreachable, recovery must not block startup."""
+    from otelmind.api import main as main_module
+
+    @asynccontextmanager
+    async def factory():
+        raise RuntimeError("DB unreachable")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(main_module, "get_session", factory)
+    assert await main_module._recover_stuck_group_runs(stuck_after_minutes=10) == 0
