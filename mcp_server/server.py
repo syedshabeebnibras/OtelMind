@@ -8,6 +8,8 @@ Tools:
   check_hallucination     — grounding check for LLM outputs
   run_eval_benchmark      — accuracy / faithfulness / relevance scoring
   get_trace_summary       — duration, tokens, cost, bottlenecks, timeline
+  calibrate_judge         — judge vs human-label agreement (Cohen's kappa, bias)
+  run_multiagent_eval     — spawn a multi-agent group and score collaboration
 
 Run directly:
     python server.py
@@ -27,9 +29,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from mcp.server.fastmcp import FastMCP
 
+from tools.calibration import calibrate_judge_tool as _calibrate_judge
 from tools.classifier import classify_agent_failure as _classify
 from tools.eval_runner import run_eval_benchmark as _run_eval
 from tools.hallucination import check_hallucination as _check_hallucination
+from tools.multiagent import run_multiagent_eval_tool as _run_multiagent
 from tools.trace_summary import get_trace_summary as _trace_summary
 
 mcp = FastMCP(
@@ -162,6 +166,59 @@ def get_trace_summary(trace: list[dict[str, Any]]) -> dict[str, Any]:
       timeline          — ordered list of spans with key fields
     """
     return _trace_summary(trace)
+
+
+@mcp.tool()
+async def calibrate_judge(
+    test_cases: list[dict[str, Any]],
+    human_labels: list[dict[str, Any]],
+    dimensions: list[str] | None = None,
+) -> dict[str, Any]:
+    """Calibrate the LLM judge against human-labeled ground truth.
+
+    test_cases — list of dicts with id, question, actual, context (optional),
+                 expected (optional).
+    human_labels — list of dicts with case_id, dimension (e.g. "faithfulness"),
+                   score (float 0-1), annotator_id (optional).
+    dimensions — optional filter. Defaults to whatever dimensions appear in labels.
+
+    Returns:
+      cohens_kappa     — agreement coefficient (-1 to 1; 0 = chance, 1 = perfect)
+      agreement_rate   — simple bucket agreement %
+      bias             — judge mean minus human mean (positive = judge is too generous)
+      confusion_matrix — predicted × actual bucket counts
+      per_dimension    — kappa, agreement, MAE, bias per dimension
+      calibration_curve — predicted-bin → actual-mean, for reliability diagrams
+      judge_model      — which model produced the judge scores
+    """
+    return await _calibrate_judge(test_cases, human_labels, dimensions)
+
+
+@mcp.tool()
+async def run_multiagent_eval(
+    problem: str,
+    roles: list[dict[str, Any]],
+    protocol: str = "round_robin",
+    max_rounds: int = 5,
+    expected_output: str | None = None,
+) -> dict[str, Any]:
+    """Spawn a multi-agent group, run their chosen protocol, and score collaboration.
+
+    problem — the task description the group must solve.
+    roles — list of role specs, each: {"name": str, "system_prompt": str,
+            "tools": list | null, "model": str (optional), "max_tokens": int (optional),
+            "temperature": float (optional)}
+    protocol — round_robin | debate | blackboard | consensus | delegation
+    max_rounds — cap on communication rounds
+    expected_output — optional reference answer (enables task_completion scoring)
+
+    Requires ANTHROPIC_API_KEY for the underlying Claude calls.
+
+    Returns final output plus collaboration metrics: convergence_rate,
+    communication_efficiency, error_correction_count, dominance_score,
+    per-agent stats, rounds used, tokens, and cost.
+    """
+    return await _run_multiagent(problem, roles, protocol, max_rounds, expected_output)
 
 
 def main() -> None:
