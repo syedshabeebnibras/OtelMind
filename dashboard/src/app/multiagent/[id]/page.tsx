@@ -1,6 +1,5 @@
 "use client";
 
-import { use } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
@@ -49,9 +48,9 @@ function MetricCard({ label, value, hint }: { label: string; value: string; hint
 export default function GroupRunDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id } = use(params);
+  const { id } = params;
   const { run, isLoading, isError, mutate } = useGroupRun(id);
 
   if (isLoading) {
