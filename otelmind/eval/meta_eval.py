@@ -89,7 +89,8 @@ class MetaEvaluator:
         seed: int = 42,
     ) -> None:
         self._auditor_model = auditor_model or settings.eval_auditor_model
-        self._api_key = api_key or settings.anthropic_api_key
+        # Distinguish "explicit empty (disable)" from "not provided (use default)"
+        self._api_key = api_key if api_key is not None else settings.anthropic_api_key
         self._disagreement_threshold = disagreement_threshold
         self._rng = random.Random(seed)
 

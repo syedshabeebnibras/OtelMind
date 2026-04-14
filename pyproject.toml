@@ -73,6 +73,9 @@ check_untyped_defs = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow — typically real network / LLM calls (deselect with -m 'not slow')",
+]
 
 [tool.black]
 line-length = 100

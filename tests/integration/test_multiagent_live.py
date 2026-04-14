@@ -29,10 +29,13 @@ _SKIP_REASON = (
     "Set the env var to run it."
 )
 
-pytestmark = pytest.mark.skipif(
-    not os.environ.get("ANTHROPIC_API_KEY"),
-    reason=_SKIP_REASON,
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not os.environ.get("ANTHROPIC_API_KEY"),
+        reason=_SKIP_REASON,
+    ),
+    pytest.mark.slow,
+]
 
 
 @pytest.mark.asyncio

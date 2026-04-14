@@ -65,10 +65,14 @@ jobs:
         run: alembic upgrade head
 
       - name: Unit tests
-        run: pytest tests/unit/ -v --tb=short
+        run: pytest tests/unit/ -v --tb=short -m "not slow"
 
-      - name: Integration tests
-        run: pytest tests/integration/ -v --tb=short
+      - name: Integration tests (fast)
+        run: pytest tests/integration/ -v --tb=short -m "not slow"
+
+      - name: Live integration tests (only when ANTHROPIC_API_KEY secret is set)
+        if: env.ANTHROPIC_API_KEY != ''
+        run: pytest tests/integration/test_multiagent_live.py -v --tb=short -m slow
 
   quality-gate:
     runs-on: ubuntu-latest
