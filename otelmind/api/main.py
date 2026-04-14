@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI
 from loguru import logger
+from sqlalchemy import select
 
 from otelmind import __version__
 from otelmind.api.calibration_routes import router as calibration_router
@@ -16,14 +18,50 @@ from otelmind.api.multiagent_routes import router as multiagent_router
 from otelmind.api.rbac_routes import rbac_router
 from otelmind.api.routes import router
 from otelmind.config import settings
+from otelmind.db import get_session
 from otelmind.eval.worker import (
     daily_golden_regression_loop,
     eval_run_worker_loop,
     trace_autoscorer_loop,
 )
 from otelmind.instrumentation.tracer import init_tracer, shutdown_tracer
+from otelmind.storage.models import GroupRun
 from otelmind.storage.partitioning import drop_expired_partitions, ensure_partitions
 from otelmind.watchdog.watchdog_agent import WatchdogAgent
+
+
+async def _recover_stuck_group_runs(stuck_after_minutes: int = 10) -> int:
+    """Reset group runs orphaned by a previous process crash.
+
+    A POST /api/multiagent/runs request kicks off a background asyncio task
+    that drives AgentGroup.solve. If the API process restarts (deploy, OOM
+    kill, etc.) while that task is mid-flight, the row sits forever in
+    'running' or 'pending'. On startup we sweep for any such rows older
+    than the cutoff and mark them failed with an explicit error.
+
+    Returns the number of rows reset (0 when nothing was stuck).
+    """
+    cutoff = datetime.now(UTC) - timedelta(minutes=stuck_after_minutes)
+    try:
+        async with get_session() as session:
+            stmt = select(GroupRun).where(
+                GroupRun.status.in_(["running", "pending"]),
+                GroupRun.created_at < cutoff,
+            )
+            stuck = list((await session.execute(stmt)).scalars().all())
+            for run in stuck:
+                run.status = "failed"
+                run.result = {
+                    **(run.result or {}),
+                    "error": "Process restarted while run was in progress",
+                }
+                run.completed_at = datetime.now(UTC)
+        if stuck:
+            logger.warning("Recovered {} stuck group runs", len(stuck))
+        return len(stuck)
+    except Exception as exc:  # best-effort; never block startup
+        logger.warning("stuck group run recovery skipped: {}", exc)
+        return 0
 
 
 async def _partition_maintenance_loop() -> None:
@@ -52,6 +90,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await ensure_partitions()
     except Exception as exc:
         logger.warning("initial partition ensure skipped: {}", exc)
+
+    # Reset any GroupRun rows orphaned by the previous crash/restart.
+    await _recover_stuck_group_runs()
 
     partition_task = asyncio.create_task(_partition_maintenance_loop())
 
