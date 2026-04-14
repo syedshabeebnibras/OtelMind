@@ -1,0 +1,54 @@
+{
+  "scenario_id": "security-audit-file-upload",
+  "protocol": "consensus",
+  "result": {
+    "problem": "Audit a file-upload feature for security issues and propose mitigations.",
+    "protocol": "ConsensusProtocol",
+    "status": "failed",
+    "rounds_completed": 1,
+    "total_tokens": 0,
+    "final_output": null,
+    "messages": [],
+    "roles": [
+      {
+        "name": "coder",
+        "model": "claude-sonnet-4-20250514",
+        "metadata": {
+          "language": "python"
+        }
+      },
+      {
+        "name": "reviewer",
+        "model": "claude-sonnet-4-20250514",
+        "metadata": {}
+      },
+      {
+        "name": "critic",
+        "model": "claude-sonnet-4-20250514",
+        "metadata": {}
+      }
+    ],
+    "shared_context": {
+      "problem": "Audit a file-upload feature for security issues and propose mitigations.",
+      "context": "API accepts multipart/form-data with filename controlled by the client; files stored locally and served under /uploads/<filename>.",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011Ca4Wpwc7CWxyvTdsJq51D'}"
+    },
+    "started_at": "2026-04-14T23:16:02.119657+00:00",
+    "completed_at": "2026-04-14T23:16:02.407162+00:00",
+    "budget_usd": 0.5,
+    "budget_remaining_usd": 0.5,
+    "cost_usd": 0.0
+  },
+  "metrics": {
+    "task_completion_score": 0.5,
+    "convergence_rate": 0.0,
+    "communication_efficiency": 0.0,
+    "error_correction_count": 0,
+    "dominance_score": 0.0,
+    "deadlock_occurred": true,
+    "rounds_to_completion": 1,
+    "total_tokens": 0,
+    "total_cost_usd": 0.0,
+    "per_agent_stats": {}
+  }
+}
