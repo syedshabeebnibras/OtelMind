@@ -30,5 +30,11 @@ langchain-core>=0.1.20
 # ─── LLM judge (eval pipeline) ────────────────────────────────────
 openai>=1.30.0
 
+# ─── Multi-agent + meta-eval (Anthropic API) ──────────────────────
+anthropic>=0.39.0
+
+# ─── MCP server ───────────────────────────────────────────────────
+mcp>=1.0.0
+
 # ─── Golden eval datasets ─────────────────────────────────────────
 pyyaml>=6.0.1
