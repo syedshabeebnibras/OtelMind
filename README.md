@@ -12,7 +12,7 @@ Observability, failure detection, and self-healing for LLM agents.
 
 ## Benchmark Results
 
-Multi-agent group benchmarks — 10 scenarios × 3 protocols (round_robin, debate, consensus) run against `claude-sonnet-4-20250514` with a $0.50/run budget cap and 3 max rounds. Full raw data in `config/eval_datasets/benchmark_results/`.
+Multi-agent group benchmarks — 10 scenarios × 3 protocols (round_robin, debate, consensus) run against `claude-sonnet-4-20250514` with a $0.50/run budget cap and 3 max rounds. Full raw data in [`config/eval_datasets/benchmark_results/`](config/eval_datasets/benchmark_results/).
 
 **Aggregate** (24 successful runs; 6 failed on credit exhaustion during the sweep):
 
@@ -32,7 +32,7 @@ Total spend: ~$11.15 across ~2M tokens.
 - **The `budget_usd` guard works as designed** — 11 runs were cleanly terminated with `status=budget_exceeded` when cumulative cost crossed the cap, preserving partial results and preventing runaway spend.
 - **Debate handles polarised problems that deadlock Consensus** — `code-review-auth-middleware` deadlocked under Consensus but completed under Debate because the forced VERDICT handshake yields a terminal answer even when debaters disagree.
 
-See `config/eval_datasets/benchmark_results/SUMMARY.md` for the per-scenario breakdown and detailed observations (including why `task_completion_score` is low — heuristic-judge fallback because `scripts/run_benchmarks.py` didn't export `OPENAI_API_KEY`).
+See [**`config/eval_datasets/benchmark_results/SUMMARY.md`**](config/eval_datasets/benchmark_results/SUMMARY.md) for the per-scenario breakdown and detailed observations (including why `task_completion_score` is low — heuristic-judge fallback because `scripts/run_benchmarks.py` didn't export `OPENAI_API_KEY`).
 
 ---
 
