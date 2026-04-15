@@ -28,9 +28,19 @@ OTELMIND_INGEST_URL = os.environ.get(
 class OtelMindTelemetry:
     """Captures span data from LangGraph nodes and sends to OtelMind API."""
 
-    def __init__(self, service_name: str = "research-agent", ingest_url: str | None = None) -> None:
+    def __init__(
+        self,
+        service_name: str = "research-agent",
+        ingest_url: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
+        import os
+
         self.service_name = service_name
         self.ingest_url = ingest_url or OTELMIND_INGEST_URL
+        # Pulled from arg → OTELMIND_API_KEY env → settings (.env). Empty string
+        # is fine for local dev where the API runs without auth middleware.
+        self.api_key = api_key or os.environ.get("OTELMIND_API_KEY", "")
         self._trace_id: str = ""
         self._span_buffer: list[dict[str, Any]] = []
         self._step_counter: int = 0
@@ -165,11 +175,14 @@ class OtelMindTelemetry:
         self._span_buffer.clear()
 
         try:
+            headers = {"Content-Type": "application/json"}
+            if self.api_key:
+                headers["x-api-key"] = self.api_key
             resp = httpx.post(
                 self.ingest_url,
                 json=spans,
                 timeout=15.0,
-                headers={"Content-Type": "application/json"},
+                headers=headers,
             )
             resp.raise_for_status()
             data = resp.json()
