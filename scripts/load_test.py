@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import statistics
 import sys
@@ -82,10 +83,8 @@ async def main(args: argparse.Namespace) -> int:
     async with httpx.AsyncClient(timeout=timeout, http2=False) as client:
         # Warm up the connection so the first call's TLS/handshake doesn't
         # skew p50.
-        try:
+        with contextlib.suppress(Exception):
             await client.request(args.method, args.url, content=body, headers=headers)
-        except Exception:
-            pass
 
         await asyncio.gather(
             *[
