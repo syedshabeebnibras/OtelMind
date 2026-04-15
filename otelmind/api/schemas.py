@@ -364,6 +364,19 @@ class GroupRunsListResponse(BaseModel):
     total: int
 
 
+class ProtocolRecommendationRequest(BaseModel):
+    problem: str
+    top_k: int = 5
+    min_similarity: float = 0.1
+
+
+class ProtocolRecommendationResponse(BaseModel):
+    recommended: str
+    reason: str
+    per_protocol: list[dict[str, Any]]
+    neighbours: list[dict[str, Any]]
+
+
 # ── Judge calibration ─────────────────────────────────────────────────
 
 
