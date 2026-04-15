@@ -1,12 +1,14 @@
-"""MCP tool: calibrate the LLM judge against human-labeled cases."""
+"""MCP tool: calibrate the LLM judge against human-labeled cases.
+
+Imports the otelmind package lazily so the published `otelmind-mcp` wheel
+installs and lists tools cleanly even when the parent `otelmind` package
+isn't installed. Calling this tool without `otelmind` available raises a
+clear ImportError rather than crashing at server startup.
+"""
 
 from __future__ import annotations
 
 from typing import Any
-
-from otelmind.eval.calibration import HumanLabel, calibrate_judge
-from otelmind.eval.judge import LLMJudge
-from otelmind.eval.regression import EvalCase
 
 
 async def calibrate_judge_tool(
@@ -21,6 +23,16 @@ async def calibrate_judge_tool(
     human_labels — list of dicts with case_id, dimension, score (0-1), annotator_id (optional)
     dimensions   — which judge dimensions to evaluate (default: all dimensions found in labels)
     """
+    try:
+        from otelmind.eval.calibration import HumanLabel, calibrate_judge
+        from otelmind.eval.judge import LLMJudge
+        from otelmind.eval.regression import EvalCase
+    except ImportError as exc:
+        raise ImportError(
+            "calibrate_judge requires the otelmind package. "
+            "Install with: pip install otelmind  (or `pip install otelmind-mcp[full]`)"
+        ) from exc
+
     cases = [
         EvalCase(
             id=str(c["id"]),

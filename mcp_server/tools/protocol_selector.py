@@ -1,15 +1,13 @@
 """MCP tool: recommend a multi-agent protocol for a new problem.
 
 Thin wrapper around otelmind.eval.protocol_selector.recommend_protocol.
-Exposed via the MCP server so Claude can ask for a protocol suggestion
-before spawning a group.
+Imports lazily so the published wheel doesn't hard-require the otelmind
+package at install time.
 """
 
 from __future__ import annotations
 
 from typing import Any
-
-from otelmind.eval.protocol_selector import recommend_protocol
 
 
 async def recommend_protocol_tool(
@@ -36,5 +34,13 @@ async def recommend_protocol_tool(
                    ids, problems, protocols, statuses, similarities,
                    task scores, and costs — for transparency.
     """
+    try:
+        from otelmind.eval.protocol_selector import recommend_protocol
+    except ImportError as exc:
+        raise ImportError(
+            "recommend_protocol requires the otelmind package. "
+            "Install with: pip install otelmind  (or `pip install otelmind-mcp[full]`)"
+        ) from exc
+
     rec = await recommend_protocol(problem, top_k=top_k, min_similarity=min_similarity)
     return rec.to_dict()
