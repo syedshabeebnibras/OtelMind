@@ -75,11 +75,19 @@ class ApiKey(Base):
 
     @staticmethod
     def generate_key(prefix: str = "om_") -> tuple[str, str]:
-        """Return (raw_key, key_hash). Store only the hash."""
+        """Return (raw_key, key_hash). Store only the hash.
+
+        Uses BLAKE2b (a modern, cryptographic hash) rather than SHA-256
+        for the lookup hash. We deliberately don't use a slow KDF here:
+        the input is 32 bytes of urlsafe-random secrets-module entropy
+        (~256 bits), so brute-forcing the hash is computationally
+        infeasible even with an unsalted fast hash. A slow KDF would
+        only add per-request latency without a security gain.
+        """
         import hashlib
 
         raw = prefix + secrets.token_urlsafe(32)
-        key_hash = hashlib.sha256(raw.encode()).hexdigest()
+        key_hash = hashlib.blake2b(raw.encode(), digest_size=32).hexdigest()
         return raw, key_hash
 
 

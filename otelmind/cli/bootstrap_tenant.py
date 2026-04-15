@@ -1,9 +1,16 @@
-"""Create the default tenant and a bootstrap API key (prints raw key once)."""
+"""Create the default tenant and a bootstrap API key.
+
+The raw key is written to a 0600-permissioned file (path printed to
+stderr) rather than echoed to stdout, so it doesn't end up in shell
+history, terminal scrollback buffers, or CI logs by accident.
+"""
 
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
+import tempfile
 import uuid
 
 from sqlalchemy import select
@@ -47,7 +54,19 @@ async def _run() -> int:
             )
         )
 
-    print(raw)
+    # Write the key to a private file in $XDG_RUNTIME_DIR (or temp) with
+    # restrictive permissions, then print only the path to stderr.
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+    fd, path = tempfile.mkstemp(prefix="otelmind-key-", suffix=".txt", dir=runtime_dir)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(raw + "\n")
+    except Exception:
+        os.close(fd)
+        raise
+    print(f"API key written to {path} (chmod 0600).", file=sys.stderr)
+    print(f"Read once with: cat {path} && rm {path}", file=sys.stderr)
     return 0
 
 

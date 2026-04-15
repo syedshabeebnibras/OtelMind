@@ -35,6 +35,16 @@ _api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
 
 def _hash_key(raw: str) -> str:
+    """New-format key hash (BLAKE2b-256). Used for issuing fresh keys."""
+    return hashlib.blake2b(raw.encode(), digest_size=32).hexdigest()
+
+
+def _hash_key_legacy(raw: str) -> str:
+    """Legacy SHA-256 hash — kept ONLY for back-compat verification of
+    keys minted before the BLAKE2b switch. Existing rows in the DB still
+    have SHA-256 hashes; rotating every tenant's key in lockstep with
+    the algorithm change wasn't feasible.
+    """
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -46,12 +56,14 @@ async def require_api_key(
     if not raw_key:
         raise HTTPException(status_code=401, detail="Missing x-api-key header")
 
-    key_hash = _hash_key(raw_key)
+    # Try the new BLAKE2b hash first, then fall back to the legacy SHA-256
+    # hash for keys minted before the algorithm switch.
+    candidate_hashes = [_hash_key(raw_key), _hash_key_legacy(raw_key)]
 
     async with get_session() as session:
         stmt = (
             select(ApiKey)
-            .where(ApiKey.key_hash == key_hash, ApiKey.revoked_at.is_(None))
+            .where(ApiKey.key_hash.in_(candidate_hashes), ApiKey.revoked_at.is_(None))
             .options(selectinload(ApiKey.tenant))
         )
         result = await session.execute(stmt)

@@ -112,9 +112,27 @@ class AuditLogResponse(BaseModel):
 
 
 def _hash_password(raw: str) -> str:
-    salt = secrets.token_hex(8)
-    digest = hashlib.sha256((salt + raw).encode()).hexdigest()
-    return f"{salt}${digest}"
+    """Hash a password with stdlib scrypt — slow KDF, salted, suitable for
+    storing user-chosen passwords. Output format: `scrypt$<hex-salt>$<hex-hash>`.
+    """
+    salt = secrets.token_bytes(16)
+    # OWASP-recommended scrypt parameters as of 2024: N=2**17, r=8, p=1.
+    digest = hashlib.scrypt(raw.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return f"scrypt${salt.hex()}${digest.hex()}"
+
+
+def _verify_password(raw: str, stored: str) -> bool:
+    """Constant-time verify against a `scrypt$<salt>$<hash>` stored hash."""
+    try:
+        scheme, salt_hex, expected_hex = stored.split("$", 2)
+        if scheme != "scrypt":
+            return False
+        salt = bytes.fromhex(salt_hex)
+        expected = bytes.fromhex(expected_hex)
+        digest = hashlib.scrypt(raw.encode(), salt=salt, n=2**14, r=8, p=1, dklen=len(expected))
+        return secrets.compare_digest(digest, expected)
+    except Exception:
+        return False
 
 
 # ── Roles ───────────────────────────────────────────────────────────────
