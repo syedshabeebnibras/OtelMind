@@ -25,7 +25,9 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from otelmind.config import settings  # noqa: E402
 from otelmind.eval.group_metrics import evaluate_group  # noqa: E402
+from otelmind.eval.judge import LLMJudge  # noqa: E402
 from otelmind.multiagent.group import AgentGroup  # noqa: E402
 from otelmind.multiagent.protocols import (  # noqa: E402
     ConsensusProtocol,
@@ -71,7 +73,16 @@ async def _run_one(scenario: dict, protocol_key: str) -> dict:
     )
     expected = scenario.get("expected_output")
     result = await group.solve(scenario["problem"], context=scenario.get("context", ""))
-    metrics = await evaluate_group(result, expected_output=expected, max_rounds=3)
+
+    # Pass a real OpenAI-judge through so task_completion_score is a real
+    # faithfulness score against `expected_output`, not the heuristic 0.5
+    # fallback we got on the first sweep (this project stores the key as
+    # LLM_API_KEY, not the default OPENAI_API_KEY the judge looks up).
+    openai_key = settings.llm.api_key or os.environ.get("OPENAI_API_KEY") or None
+    judge = (
+        LLMJudge(api_key=openai_key, model=settings.llm.model or "gpt-4o") if openai_key else None
+    )
+    metrics = await evaluate_group(result, expected_output=expected, judge=judge, max_rounds=3)
     return {
         "scenario_id": scenario["id"],
         "protocol": protocol_key,
