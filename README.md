@@ -14,17 +14,16 @@ Observability, failure detection, and self-healing for LLM agents.
 
 Multi-agent group benchmarks — 10 scenarios × 3 protocols (round_robin, debate, consensus) run against `claude-sonnet-4-20250514` with a $0.50/run budget cap and 3 max rounds. Full raw data in [`config/eval_datasets/benchmark_results/`](config/eval_datasets/benchmark_results/).
 
-**Aggregate** (24 successful runs; 6 failed on credit exhaustion during the sweep):
+**Aggregate** (30/30 runs successful; matrix is complete):
 
 | Status | Count |
 |---|---|
-| `budget_exceeded` | 11 |
-| `completed` | 6 |
-| `converged` | 5 |
-| `deadlocked` | 3 |
-| `failed` (credits) | 5 |
+| `budget_exceeded` | 12 |
+| `completed` | 8 |
+| `converged` | 6 |
+| `deadlocked` | 4 |
 
-Total spend: ~$11.15 across ~2M tokens.
+Total spend: ~$12.55 across ~2.23M tokens. Zero credit failures.
 
 **Headline findings:**
 

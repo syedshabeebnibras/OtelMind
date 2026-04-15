@@ -1,9 +1,10 @@
 # Multi-agent benchmark results
 
-**Run date:** 2026-04-14
+**Run dates:** 2026-04-14 (initial 25 successful + 5 credit-failed) and 2026-04-14 (4 missing scenarios re-run after credit top-up)
 **Model:** claude-sonnet-4-20250514
 **Budget cap per run:** $0.50 (enforced by `AgentGroup.budget_usd`)
 **Max rounds per run:** 3
+**Matrix:** 10 scenarios × 3 protocols = 30 runs, all successful
 
 ## Aggregate
 
@@ -12,35 +13,35 @@
 | Scenarios | 10 |
 | Protocols | 3 (round_robin, debate, consensus) |
 | Total runs | 30 |
-| Total tokens consumed | 1,979,021 |
-| Total spend | ~$11.15 |
+| Failed runs | **0** |
+| Total tokens consumed | 2,231,410 |
+| Total spend | ~$12.55 |
 
 ### Status breakdown
 
 | Status | Count | Meaning |
 |---|---|---|
-| `budget_exceeded` | 11 | Hit the $0.50/run budget cap before finishing — proves the budget guard works |
-| `converged` | 5 | Protocol (Consensus/Debate) detected early agreement and stopped voluntarily |
-| `completed` | 6 | Ran all `max_rounds=3` rounds cleanly |
-| `deadlocked` | 3 | ConsensusProtocol exhausted rounds without majority → escalated to tiebreaker |
-| `failed` | 5 | Anthropic API returned 400 "credit balance too low" during the last 6 runs of the sweep (account limit) |
+| `budget_exceeded` | 12 | Hit the $0.50/run budget cap before finishing — proves the budget guard works |
+| `completed` | 8 | Ran all `max_rounds=3` rounds cleanly |
+| `converged` | 6 | Protocol (Consensus) detected early agreement and stopped voluntarily |
+| `deadlocked` | 4 | ConsensusProtocol exhausted rounds without majority → escalated to tiebreaker |
 
 ## Observations
 
-1. **Budget cap fires on large-scenario × talkative-protocol combinations.** RoundRobin and Debate regularly exceed $0.50 on complex architectural scenarios (design-api-schema, system-architecture-rate-limiter) because they run every round of every agent even when agents are close to consensus. Consensus tends to finish under-budget because its majority-detection short-circuits.
+1. **Budget cap fires on talkative-protocol × complex-scenario combinations.** RoundRobin and Debate regularly exceed $0.50 on architectural scenarios (design-api-schema, system-architecture-rate-limiter, security-audit-file-upload) because they run every round of every agent even when agents are close to consensus. Consensus tends to finish under-budget because its majority-detection short-circuits.
 
-2. **Consensus is the most cost-efficient protocol.** 5 of the 10 scenarios' Consensus runs converged in 1–2 rounds at $0.08–$0.37. The corresponding RoundRobin runs of the same scenarios cost 3–10× more and often hit the budget cap.
+2. **Consensus is the most cost-efficient protocol.** 6 of the 10 Consensus runs converged in 1–2 rounds at $0.08–$0.37. The corresponding RoundRobin/Debate runs of the same scenarios cost 3–10× more and often hit the budget cap.
 
-3. **Debate sometimes deadlocks under cost pressure.** code-review-auth-middleware deadlocked under Consensus but completed under Debate — the debater pair produced divergent views that the judge couldn't collapse into a majority, while Debate's forced VERDICT: handshake yielded a terminal answer.
+3. **Debate breaks deadlocks Consensus can't resolve.** code-review-auth-middleware deadlocked under Consensus but completed under Debate — the debater pair produced divergent views the judge couldn't collapse into a majority, while Debate's forced VERDICT: handshake yielded a terminal answer.
 
-4. **Task-completion scores look low because the eval judge fell back to heuristic.** `scripts/run_benchmarks.py` doesn't export `OPENAI_API_KEY` (the project's .env uses `LLM_API_KEY`), so the `LLMJudge()` instantiated inside `evaluate_group` returned heuristic scores rather than real GPT-4o faithfulness scores. The raw text outputs are still in the per-run JSON — a future re-score pass against a properly-configured judge would produce meaningful task scores. The task_score=0.50 rows are all failed runs (heuristic default).
+4. **Task-completion scores are unreliable on this run.** `scripts/run_benchmarks.py` was patched in commit `516a5ae` to thread `OPENAI_API_KEY` to the judge, but the runs in this summary were completed before that fix landed — task scores fell back to heuristic. The two scores at 0.50 (`performance-optimization-nplusone_consensus`, `security-audit-file-upload_consensus`) are the heuristic default. The next sweep with the patched script will produce real LLM-judged faithfulness scores against `expected_output`. The raw text outputs in each `*.json` are still good and can be re-scored without re-calling Claude.
 
-5. **Credit exhaustion hit at run #25.** The last 6 scheduled runs (performance-optimization-nplusone × 3, security-audit-file-upload × 1, + 2 more) all returned 400 "Your credit balance is too low" from Anthropic. These rows have 0 tokens and status=failed. Re-run after topping up credits to complete the matrix.
+5. **No single-agent baseline yet.** `scripts/run_single_agent_baseline.py` was added in commit `4a55944` but hasn't been run against this matrix. Once it runs, the summary table grows a "Single" column and we can answer: do groups actually outperform a single Claude call, or just cost 3-10× more for similar quality?
 
 ## Per-scenario × protocol matrix
 
-| Scenario                 | Protocol     | Status     | Rounds | Tokens | Cost     | Convergence | Task Score |
-|--------------------------|--------------|------------|--------|--------|----------|-------------|------------|
+| Scenario                 | Protocol     | Status     | Rounds | Tokens | Cost     | Convergence | Group Score |
+|--------------------------|--------------|------------|--------|--------|----------|-------------|-------------|
 | api-integration-webhook-retry | consensus    | converged  |      1 | 14,499 | $0.1143 |        0.67 |       0.02 |
 | api-integration-webhook-retry | debate       | budget_exceeded |      3 | 133,534 | $0.7526 |        0.00 |       0.01 |
 | api-integration-webhook-retry | round_robin  | budget_exceeded |      3 | 149,743 | $0.8000 |        0.00 |       0.01 |
@@ -59,11 +60,11 @@
 | design-api-schema        | consensus    | deadlocked |      3 | 108,261 | $0.5816 |        0.00 |       0.01 |
 | design-api-schema        | debate       | budget_exceeded |      3 | 114,051 | $0.6278 |        0.00 |       0.01 |
 | design-api-schema        | round_robin  | budget_exceeded |      3 | 145,896 | $0.7764 |        0.00 |       0.02 |
-| performance-optimization-nplusone | consensus    | failed     |      1 |      0 | $0.0000 |        0.00 |       0.50 |
-| performance-optimization-nplusone | debate       | failed     |      1 |      0 | $0.0000 |        0.00 |       0.50 |
-| performance-optimization-nplusone | round_robin  | failed     |      1 |      0 | $0.0000 |        0.00 |       0.50 |
-| security-audit-file-upload | consensus    | failed     |      1 |      0 | $0.0000 |        0.00 |       0.50 |
-| security-audit-file-upload | debate       | failed     |      3 | 73,442 | $0.4043 |        0.00 |       0.01 |
+| performance-optimization-nplusone | consensus    | converged  |      2 | 12,489 | $0.0872 |        0.33 |       0.50 |
+| performance-optimization-nplusone | debate       | completed  |      3 | 42,295 | $0.2554 |        0.00 |       0.00 |
+| performance-optimization-nplusone | round_robin  | completed  |      3 | 49,717 | $0.2830 |        0.00 |       0.00 |
+| security-audit-file-upload | consensus    | deadlocked |      3 | 110,290 | $0.5897 |        0.00 |       0.50 |
+| security-audit-file-upload | debate       | budget_exceeded |      3 | 111,040 | $0.5864 |        0.00 |       0.00 |
 | security-audit-file-upload | round_robin  | budget_exceeded |      3 | 107,576 | $0.5826 |        0.00 |       0.01 |
 | system-architecture-rate-limiter | consensus    | converged  |      2 | 56,595 | $0.3673 |        0.33 |       0.02 |
 | system-architecture-rate-limiter | debate       | budget_exceeded |      3 | 138,201 | $0.7726 |        0.00 |       0.03 |
