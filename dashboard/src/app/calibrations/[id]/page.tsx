@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
@@ -38,9 +39,9 @@ function MetricCard({ label, value, hint }: { label: string; value: string; hint
 export default function CalibrationDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { id } = params;
+  const { id } = use(params);
   const { calibration, isLoading, isError } = useCalibration(id);
 
   if (isLoading) {

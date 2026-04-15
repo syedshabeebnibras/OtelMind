@@ -9,9 +9,8 @@ const nextConfig = {
       },
     ];
   },
-  experimental: {
-    typedRoutes: false,
-  },
+  // typedRoutes moved out of `experimental` in Next 15
+  typedRoutes: false,
 };
 
 export default nextConfig;

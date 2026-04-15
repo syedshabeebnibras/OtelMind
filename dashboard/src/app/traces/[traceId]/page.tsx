@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -290,8 +290,9 @@ function flattenSpanTree(spans: Span[]): SpanNode[] {
 export default function TraceDetailPage({
   params,
 }: {
-  params: { traceId: string };
+  params: Promise<{ traceId: string }>;
 }) {
+  const { traceId } = use(params);
   const router = useRouter();
 
   // Eval-originated failures are stored in failure_classifications with a
@@ -299,8 +300,8 @@ export default function TraceDetailPage({
   // failure row's trace_id column is NOT NULL. Those "traces" don't
   // exist in the traces table — redirect straight to the eval run view
   // instead of trying to fetch them.
-  const isEvalFailure = params.traceId?.startsWith("eval-");
-  const evalRunId = isEvalFailure ? params.traceId.slice(5) : null;
+  const isEvalFailure = traceId?.startsWith("eval-");
+  const evalRunId = isEvalFailure ? traceId.slice(5) : null;
 
   useEffect(() => {
     if (isEvalFailure && evalRunId) {
@@ -311,7 +312,7 @@ export default function TraceDetailPage({
   // Skip the fetch entirely when it's an eval failure — the `null`
   // traceId means useTrace short-circuits to no SWR key.
   const { trace, isLoading, isError, mutate } = useTrace(
-    isEvalFailure ? null : params.traceId
+    isEvalFailure ? null : traceId
   );
   const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
 
@@ -337,7 +338,7 @@ export default function TraceDetailPage({
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <AlertCircle className="h-8 w-8 text-amber-400" />
         <p className="text-slate-400 text-sm">Failed to load trace</p>
-        <p className="text-slate-500 text-xs font-mono">{params.traceId}</p>
+        <p className="text-slate-500 text-xs font-mono">{traceId}</p>
         <div className="flex gap-2">
           <Button
             variant="outline"
