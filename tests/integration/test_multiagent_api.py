@@ -205,6 +205,40 @@ async def test_get_messages_invalid_uuid_422(auth, stub_session):
     assert resp.status_code == 422
 
 
+# ─── POST /api/v1/multiagent/recommend-protocol ───────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_recommend_protocol_no_history_defaults_to_round_robin(auth, stub_session):
+    from unittest.mock import patch
+
+    # The route calls recommend_protocol which the stub_session makes return
+    # an empty-candidates path; intercept to avoid depending on the full chain.
+    async def fake_rec(*args, **kwargs):
+        from otelmind.eval.protocol_selector import ProtocolRecommendation
+
+        return ProtocolRecommendation(recommended="round_robin", reason="no history")
+
+    with patch("otelmind.api.multiagent_routes.recommend_protocol", fake_rec):
+        async with _client() as client:
+            resp = await client.post(
+                "/api/v1/multiagent/recommend-protocol",
+                json={"problem": "new"},
+                headers={"x-api-key": "test"},
+            )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["recommended"] == "round_robin"
+    assert "history" in body["reason"]
+
+
+@pytest.mark.asyncio
+async def test_recommend_protocol_requires_auth(stub_session):
+    async with _client() as client:
+        resp = await client.post("/api/v1/multiagent/recommend-protocol", json={"problem": "new"})
+    assert resp.status_code in (401, 403, 422)
+
+
 # ─── Per-tenant multi-agent hourly rate limit ──────────────────────────────
 
 

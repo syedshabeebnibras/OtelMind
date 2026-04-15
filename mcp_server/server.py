@@ -33,6 +33,7 @@ from tools.classifier import classify_agent_failure as _classify
 from tools.eval_runner import run_eval_benchmark as _run_eval
 from tools.hallucination import check_hallucination as _check_hallucination
 from tools.multiagent import run_multiagent_eval_tool as _run_multiagent
+from tools.protocol_selector import recommend_protocol_tool as _recommend_protocol
 from tools.trace_summary import get_trace_summary as _trace_summary
 
 mcp = FastMCP(
@@ -218,6 +219,28 @@ async def run_multiagent_eval(
     per-agent stats, rounds used, tokens, and cost.
     """
     return await _run_multiagent(problem, roles, protocol, max_rounds, expected_output)
+
+
+@mcp.tool()
+async def recommend_protocol(
+    problem: str,
+    top_k: int = 5,
+    min_similarity: float = 0.1,
+) -> dict[str, Any]:
+    """Recommend a multi-agent protocol based on past group runs.
+
+    Reads historical group_runs from the DB, finds the top_k most similar
+    problems via TF-IDF cosine, and scores each protocol by task completion,
+    success rate, and cost. Falls back to round_robin when there is no
+    relevant history.
+
+    problem — the task description you'd otherwise pass to run_multiagent_eval.
+    top_k — number of nearest historical problems to consider.
+    min_similarity — cosine similarity floor (0.1 = loose, 0.5 = strict).
+
+    Returns recommended protocol + reason + per-protocol scores + neighbours.
+    """
+    return await _recommend_protocol(problem, top_k, min_similarity)
 
 
 def main() -> None:

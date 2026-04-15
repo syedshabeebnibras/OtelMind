@@ -29,9 +29,12 @@ from otelmind.api.schemas import (
     GroupRunResponse,
     GroupRunsListResponse,
     GroupRunSummary,
+    ProtocolRecommendationRequest,
+    ProtocolRecommendationResponse,
 )
 from otelmind.db import get_session
 from otelmind.eval.group_metrics import evaluate_group
+from otelmind.eval.protocol_selector import recommend_protocol
 from otelmind.multiagent.group import AgentGroup
 from otelmind.multiagent.protocols import (
     BlackboardProtocol,
@@ -325,3 +328,28 @@ async def get_group_messages(
         )
         for m in messages
     ]
+
+
+@router.post("/recommend-protocol", response_model=ProtocolRecommendationResponse)
+async def recommend_protocol_route(
+    body: ProtocolRecommendationRequest,
+    request: Request,
+    tenant: CurrentTenant,
+    _: Annotated[None, Depends(require_scope("read", "admin"))],
+) -> ProtocolRecommendationResponse:
+    """Recommend a multi-agent protocol for `problem` based on past runs.
+
+    Scores every protocol represented in the tenant's history against the
+    supplied problem via TF-IDF cosine similarity on past problem text,
+    weighted by task_completion_score, status success rate, and cost.
+    Returns both the recommendation and the per-protocol breakdown so
+    callers can surface the 'why'.
+    """
+    await enforce_tenant_rate_limit(request, tenant, "read")
+    rec = await recommend_protocol(
+        body.problem,
+        tenant_id=tenant.id,
+        top_k=body.top_k,
+        min_similarity=body.min_similarity,
+    )
+    return ProtocolRecommendationResponse(**rec.to_dict())
