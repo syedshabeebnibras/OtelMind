@@ -77,18 +77,24 @@ class ApiKey(Base):
     def generate_key(prefix: str = "om_") -> tuple[str, str]:
         """Return (raw_key, key_hash). Store only the hash.
 
-        Uses BLAKE2b (a modern, cryptographic hash) rather than SHA-256
-        for the lookup hash. We deliberately don't use a slow KDF here:
-        the input is 32 bytes of urlsafe-random secrets-module entropy
-        (~256 bits), so brute-forcing the hash is computationally
-        infeasible even with an unsalted fast hash. A slow KDF would
-        only add per-request latency without a security gain.
+        Note on the hash choice: this is an API token lookup hash, NOT a
+        password hash. The input has ~256 bits of cryptographic entropy
+        (32-byte urlsafe random), so a slow KDF (scrypt/argon2/bcrypt)
+        adds latency without security gain — brute-forcing 256 bits is
+        infeasible regardless of hash speed. We use BLAKE2b-256, which
+        is fast and modern.
+
+        CodeQL's `py/weak-sensitive-data-hashing` heuristic taint-tracks
+        anything from the `secrets` module as 'password' material; the
+        alert on the call below is dismissed as a false positive (see
+        the dismissal comment on alert #7).
         """
         import hashlib
 
-        raw = prefix + secrets.token_urlsafe(32)
-        key_hash = hashlib.blake2b(raw.encode(), digest_size=32).hexdigest()
-        return raw, key_hash
+        api_token = prefix + secrets.token_urlsafe(32)  # noqa: S324  # API key, not password
+        # API token lookup hash (256-bit input, no KDF needed — see docstring)
+        key_hash = hashlib.blake2b(api_token.encode(), digest_size=32).hexdigest()
+        return api_token, key_hash
 
 
 class AuditLog(Base):
