@@ -51,7 +51,9 @@ def _parse_iso(value: str | None) -> datetime | None:
 
 async def _resolve_tenant(session, slug: str | None) -> Tenant:
     if slug:
-        t = await session.scalar(select(Tenant).where(Tenant.slug == slug, Tenant.is_active.is_(True)))
+        t = await session.scalar(
+            select(Tenant).where(Tenant.slug == slug, Tenant.is_active.is_(True))
+        )
         if t is None:
             raise SystemExit(f"No active tenant with slug {slug!r}")
         return t
@@ -67,13 +69,10 @@ async def _resolve_tenant(session, slug: str | None) -> Tenant:
 async def _existing_scenarios_for_tenant(session, tenant_id) -> set[tuple[str, str]]:
     """Return (problem, protocol) tuples already imported for this tenant."""
     rows = (
-        (
-            await session.execute(
-                select(GroupRun.problem, GroupRun.protocol).where(GroupRun.tenant_id == tenant_id)
-            )
+        await session.execute(
+            select(GroupRun.problem, GroupRun.protocol).where(GroupRun.tenant_id == tenant_id)
         )
-        .all()
-    )
+    ).all()
     return {(p, proto) for p, proto in rows}
 
 
@@ -155,7 +154,10 @@ async def _import_one(session, tenant_id, payload: dict, existing: set[tuple[str
 
 async def main(tenant_slug: str | None, skip_failed: bool) -> int:
     if not RESULTS_DIR.exists():
-        print(f"ERROR: {RESULTS_DIR} does not exist — run scripts/run_benchmarks.py first", file=sys.stderr)
+        print(
+            f"ERROR: {RESULTS_DIR} does not exist — run scripts/run_benchmarks.py first",
+            file=sys.stderr,
+        )
         return 1
 
     files = sorted(RESULTS_DIR.glob("*.json"))
@@ -180,7 +182,9 @@ async def main(tenant_slug: str | None, skip_failed: bool) -> int:
                 errors += 1
                 continue
 
-            if skip_failed and ((payload.get("result") or {}).get("status") == "failed" or "error" in payload):
+            if skip_failed and (
+                (payload.get("result") or {}).get("status") == "failed" or "error" in payload
+            ):
                 print(f"  {path.name}: skip (failed, --skip-failed)")
                 skipped += 1
                 continue
@@ -199,6 +203,8 @@ async def main(tenant_slug: str | None, skip_failed: bool) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tenant", help="Tenant slug (default: oldest active)")
-    parser.add_argument("--skip-failed", action="store_true", help="Skip benchmark rows with status=failed")
+    parser.add_argument(
+        "--skip-failed", action="store_true", help="Skip benchmark rows with status=failed"
+    )
     args = parser.parse_args()
     raise SystemExit(asyncio.run(main(args.tenant, args.skip_failed)))

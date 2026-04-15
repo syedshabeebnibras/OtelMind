@@ -51,10 +51,9 @@ async def test_mcp_server_handshake_lists_six_tools():
         args=[str(SERVER_PATH)],
         env=None,
     )
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            tools_response = await session.list_tools()
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        tools_response = await session.list_tools()
 
     names = {t.name for t in tools_response.tools}
     expected = {
@@ -92,10 +91,9 @@ async def test_mcp_call_get_trace_summary_through_protocol():
             {"span_name": "n2", "duration_ms": 200, "status_code": "OK", "start_time": 1.1},
         ]
     }
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool("get_trace_summary", payload)
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        result = await session.call_tool("get_trace_summary", payload)
 
     assert not result.isError, f"tool returned an error: {result.content}"
     # The MCP spec wraps tool returns in a content list. The trace_summary
