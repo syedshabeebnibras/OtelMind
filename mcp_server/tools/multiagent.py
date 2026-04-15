@@ -1,30 +1,48 @@
-"""MCP tool: run a multi-agent group and evaluate their collaboration."""
+"""MCP tool: run a multi-agent group and evaluate their collaboration.
+
+Imports the otelmind package lazily so the published `otelmind-mcp` wheel
+loads cleanly without it. Calling this tool without otelmind installed
+raises a clear ImportError.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from otelmind.eval.group_metrics import evaluate_group
-from otelmind.multiagent.group import AgentGroup
-from otelmind.multiagent.protocols import (
-    BlackboardProtocol,
-    ConsensusProtocol,
-    DebateProtocol,
-    DelegationProtocol,
-    RoundRobinProtocol,
-)
-from otelmind.multiagent.roles import AgentRole
-
-_PROTOCOL_MAP = {
-    "round_robin": RoundRobinProtocol,
-    "debate": DebateProtocol,
-    "blackboard": BlackboardProtocol,
-    "consensus": ConsensusProtocol,
-    "delegation": DelegationProtocol,
-}
+# Built lazily on first call so module import doesn't depend on otelmind
+_PROTOCOL_MAP: dict[str, type] = {}
 
 
-def _role_from_dict(spec: dict[str, Any]) -> AgentRole:
+def _ensure_protocols() -> dict[str, type]:
+    global _PROTOCOL_MAP
+    if _PROTOCOL_MAP:
+        return _PROTOCOL_MAP
+    try:
+        from otelmind.multiagent.protocols import (
+            BlackboardProtocol,
+            ConsensusProtocol,
+            DebateProtocol,
+            DelegationProtocol,
+            RoundRobinProtocol,
+        )
+    except ImportError as exc:
+        raise ImportError(
+            "run_multiagent_eval requires the otelmind package. "
+            "Install with: pip install otelmind  (or `pip install otelmind-mcp[full]`)"
+        ) from exc
+    _PROTOCOL_MAP = {
+        "round_robin": RoundRobinProtocol,
+        "debate": DebateProtocol,
+        "blackboard": BlackboardProtocol,
+        "consensus": ConsensusProtocol,
+        "delegation": DelegationProtocol,
+    }
+    return _PROTOCOL_MAP
+
+
+def _role_from_dict(spec: dict[str, Any]) -> Any:
+    from otelmind.multiagent.roles import AgentRole
+
     name = str(spec.get("name") or spec.get("role") or "agent")
     return AgentRole(
         name=name,
@@ -48,9 +66,13 @@ async def run_multiagent_eval_tool(
     if not roles:
         raise ValueError("at least one role is required")
 
-    protocol_cls = _PROTOCOL_MAP.get(protocol.lower())
+    protocol_map = _ensure_protocols()
+    protocol_cls = protocol_map.get(protocol.lower())
     if protocol_cls is None:
-        raise ValueError(f"unknown protocol {protocol!r}; choose one of {list(_PROTOCOL_MAP)}")
+        raise ValueError(f"unknown protocol {protocol!r}; choose one of {list(protocol_map)}")
+
+    from otelmind.eval.group_metrics import evaluate_group
+    from otelmind.multiagent.group import AgentGroup
 
     role_objs = [_role_from_dict(r) for r in roles]
     protocol_instance = protocol_cls(max_rounds=max_rounds)
