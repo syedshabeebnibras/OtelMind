@@ -770,7 +770,7 @@ async def _snapshot_benchmark_health(tenant: Tenant) -> None:
     passed = len(regressed) == 0
 
     async with get_session() as session:
-        row = EvalRun(
+        snapshot = EvalRun(
             id=_uuid.uuid4(),
             tenant_id=tenant.id,
             name=run_name,
@@ -788,7 +788,7 @@ async def _snapshot_benchmark_health(tenant: Tenant) -> None:
             },
             completed_at=datetime.now(UTC),
         )
-        session.add(row)
+        session.add(snapshot)
 
     if regressed:
         logger.warning(
