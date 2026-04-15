@@ -655,6 +655,17 @@ async def daily_golden_regression_loop() -> None:
                     )
                 for tenant in tenants:
                     await _run_daily_golden_for_tenant(tenant)
+                    # Also snapshot the multi-agent benchmark health so
+                    # protocol-logic or prompt-template regressions surface
+                    # as degraded task_completion_score trends over time.
+                    try:
+                        await _snapshot_benchmark_health(tenant)
+                    except Exception as exc:
+                        logger.warning(
+                            "eval: benchmark health snapshot failed for tenant {}: {}",
+                            tenant.slug,
+                            exc,
+                        )
                 last_run_date = now.date()
                 logger.info("eval: daily golden tick complete for {} tenants", len(tenants))
         except asyncio.CancelledError:
@@ -664,6 +675,128 @@ async def daily_golden_regression_loop() -> None:
         # Check every 10 minutes — cheap, and catches the target hour
         # within reasonable latency without a precise cron scheduler.
         await asyncio.sleep(600)
+
+
+async def _snapshot_benchmark_health(tenant: Tenant) -> None:
+    """Write a daily benchmark-health `EvalRun` row for this tenant.
+
+    For every protocol with at least one recent group_run, computes the
+    mean task_completion_score from that protocol's runs in the last 7
+    days and records it on a `benchmark-snapshot-YYYY-MM-DD` EvalRun.
+    Compares against yesterday's snapshot and fires an alert when any
+    protocol's mean score drops by more than `eval_regression_threshold`.
+
+    This is how protocol-code / prompt-template regressions get caught
+    in CI-like fashion: the daily loop surfaces quality drift across
+    the committed benchmark scenarios, not just the static golden YAML.
+    """
+    from otelmind.multiagent.protocols import (  # avoid an import cycle at module load
+        BlackboardProtocol,  # noqa: F401 — ensures protocol names exist
+    )
+
+    today = date.today().isoformat()
+    run_name = f"benchmark-snapshot-{today}"
+
+    # 7-day window
+    cutoff = datetime.now(UTC) - timedelta(days=7)
+
+    async with get_session() as session:
+        # Skip if today's snapshot already exists (loop may tick twice)
+        existing = await session.scalar(
+            select(EvalRun).where(EvalRun.tenant_id == tenant.id, EvalRun.name == run_name)
+        )
+        if existing is not None:
+            return
+
+        from otelmind.storage.models import GroupRun
+
+        rows = list(
+            (
+                await session.execute(
+                    select(GroupRun).where(
+                        GroupRun.tenant_id == tenant.id,
+                        GroupRun.created_at >= cutoff,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    if not rows:
+        logger.info("eval: no group_runs for tenant {} in last 7d, skip", tenant.slug)
+        return
+
+    # Aggregate: mean task_completion_score per protocol
+    per_protocol: dict[str, list[float]] = {}
+    success_counts: dict[str, int] = {}
+    total_counts: dict[str, int] = {}
+    for row in rows:
+        total_counts[row.protocol] = total_counts.get(row.protocol, 0) + 1
+        if row.status in {"completed", "converged"}:
+            success_counts[row.protocol] = success_counts.get(row.protocol, 0) + 1
+        m = row.metrics or {}
+        tcs = m.get("task_completion_score")
+        if isinstance(tcs, (int, float)):
+            per_protocol.setdefault(row.protocol, []).append(float(tcs))
+
+    scores: dict[str, float] = {
+        p: round(sum(vals) / len(vals), 4) for p, vals in per_protocol.items()
+    }
+
+    # Compare to the most recent prior snapshot
+    async with get_session() as session:
+        prev = await session.scalar(
+            select(EvalRun)
+            .where(
+                EvalRun.tenant_id == tenant.id,
+                EvalRun.name.startswith("benchmark-snapshot-"),
+                EvalRun.name < run_name,
+            )
+            .order_by(desc(EvalRun.created_at))
+            .limit(1)
+        )
+
+    regressed: list[str] = []
+    if prev is not None and prev.scores:
+        threshold = settings.eval_regression_threshold
+        for protocol, prev_score in (prev.scores or {}).items():
+            cur = scores.get(protocol)
+            if cur is None:
+                continue
+            if prev_score - cur > threshold:
+                regressed.append(protocol)
+
+    passed = len(regressed) == 0
+
+    async with get_session() as session:
+        row = EvalRun(
+            id=_uuid.uuid4(),
+            tenant_id=tenant.id,
+            name=run_name,
+            baseline="benchmark",
+            candidate="benchmark",
+            dataset="config/eval_datasets/group_scenarios.yaml",
+            status="completed",
+            scores=scores,
+            passed=passed,
+            case_count=sum(total_counts.values()),
+            details={
+                "total_counts_per_protocol": total_counts,
+                "success_counts_per_protocol": success_counts,
+                "regressed_protocols": regressed,
+            },
+            completed_at=datetime.now(UTC),
+        )
+        session.add(row)
+
+    if regressed:
+        logger.warning(
+            "eval: benchmark regression on tenant {} — protocols {} dropped > {}",
+            tenant.slug,
+            regressed,
+            settings.eval_regression_threshold,
+        )
 
 
 async def _run_meta_eval(

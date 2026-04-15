@@ -263,3 +263,99 @@ async def test_daily_golden_skips_empty_dataset(monkeypatch, tmp_path):
 def _make_judge_result(score: float) -> JudgeResult:
     dim = DimensionScore("faithfulness", score, round(score * 4) + 1, "", "heuristic")
     return JudgeResult("q", "a", "", {"faithfulness": dim}, score)
+
+
+# ─── _snapshot_benchmark_health ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_snapshot_benchmark_health_detects_regression(monkeypatch):
+    """Prior snapshot scored round_robin=0.9; today's runs score 0.5 → regression."""
+    from datetime import UTC, datetime, timedelta
+
+    from otelmind.eval.worker import _snapshot_benchmark_health
+
+    tenant = MagicMock(id=uuid.uuid4(), slug="t")
+    prev = MagicMock(
+        id=uuid.uuid4(),
+        tenant_id=tenant.id,
+        name="benchmark-snapshot-2026-04-13",
+        scores={"round_robin": 0.9},
+    )
+    current_runs = [
+        MagicMock(
+            tenant_id=tenant.id,
+            protocol="round_robin",
+            status="completed",
+            metrics={"task_completion_score": 0.5},
+            created_at=datetime.now(UTC) - timedelta(hours=1),
+        )
+        for _ in range(3)
+    ]
+
+    added: list = []
+
+    # The function opens get_session() 3 times in sequence:
+    #   1. dedup check + read recent group_runs (same session)
+    #   2. read prior snapshot
+    #   3. write the new row
+    sessions = [
+        MagicMock(
+            scalar=AsyncMock(return_value=None),  # dedup → missing
+            execute=AsyncMock(
+                return_value=MagicMock(
+                    scalars=MagicMock(
+                        return_value=MagicMock(all=MagicMock(return_value=current_runs))
+                    )
+                )
+            ),
+        ),
+        MagicMock(scalar=AsyncMock(return_value=prev), execute=AsyncMock()),
+        MagicMock(
+            scalar=AsyncMock(),
+            execute=AsyncMock(),
+            add=MagicMock(side_effect=added.append),
+        ),
+    ]
+    it = iter(sessions)
+
+    @asynccontextmanager
+    async def factory():
+        yield next(it)
+
+    monkeypatch.setattr(worker_module, "get_session", factory)
+
+    await _snapshot_benchmark_health(tenant)
+
+    assert added, "new EvalRun row should be written"
+    row = added[0]
+    assert row.name.startswith("benchmark-snapshot-")
+    assert row.passed is False
+    assert "round_robin" in row.details["regressed_protocols"]
+
+
+@pytest.mark.asyncio
+async def test_snapshot_benchmark_health_skip_when_no_recent_runs(monkeypatch):
+    from otelmind.eval.worker import _snapshot_benchmark_health
+
+    tenant = MagicMock(id=uuid.uuid4(), slug="t")
+
+    # Only one session is needed — the function returns after the empty
+    # group_runs read and never opens the prev-snapshot / write sessions.
+    session = MagicMock(
+        scalar=AsyncMock(return_value=None),  # dedup → no existing snapshot
+        execute=AsyncMock(
+            return_value=MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+            )
+        ),
+    )
+
+    @asynccontextmanager
+    async def factory():
+        yield session
+
+    monkeypatch.setattr(worker_module, "get_session", factory)
+
+    # Should exit cleanly without writing a row
+    await _snapshot_benchmark_health(tenant)
